@@ -4,14 +4,18 @@ Example main.py showing how to use the KlipperController
 """
 
 from printer import KlipperController, run_example_sequence
+from camera import TakePicture
 import time
 
 def main():
     # Your Raspberry Pi IP address
     PRINTER_IP = "192.168.1.100"  # Change this to your Pi's IP
     PRINTER_PORT = 7125
-    
+
     print("=== Main.py Klipper Control Demo ===\n")
+
+    print("Capturing initial image...")
+    TakePicture()
     
     # Method 1: Use the example sequence function
     print("Method 1: Running the built-in example sequence")
