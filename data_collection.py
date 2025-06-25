@@ -3,6 +3,10 @@ import os
 import time
 import threading
 
+"""
+- Add extrussion rate logging and the option for mettler toledo balance logging 
+"""
+
 class DataCollector:
     def __init__(self, filename="print_data.csv"):
         self.filename = filename
