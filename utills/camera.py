@@ -62,8 +62,19 @@ class Camera:
             print("Not enough images for calibration.")
             return False
 
+        # Initialize camera matrix and distortion coefficients
+        img_size = gray.shape[::-1]
+        camera_matrix = np.zeros((3, 3))
+        camera_matrix[0, 0] = 1.0  # focal length
+        camera_matrix[1, 1] = 1.0  # focal length
+        camera_matrix[0, 2] = img_size[0] / 2.0  # principal point x
+        camera_matrix[1, 2] = img_size[1] / 2.0  # principal point y
+        camera_matrix[2, 2] = 1.0
+        
+        dist_coeffs = np.zeros(5)
+        
         ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-            objpoints, imgpoints, gray.shape[::-1], None, None)
+            objpoints, imgpoints, img_size, camera_matrix, dist_coeffs)
         np.savez(self.calibration_file, mtx=mtx, dist=dist)
         self.mtx = mtx
         self.dist = dist

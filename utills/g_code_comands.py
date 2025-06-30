@@ -1,3 +1,4 @@
+from tkinter import LEFT
 from configs import *
 
 # G Code Commands
@@ -571,4 +572,32 @@ def lattice(start_x, start_y, rows, cols, spacing, prnt):
 
         output.extend(printX(5+cols*spacing, prnt))
 
+    return output
+
+# Stright Line Test
+
+def straight_line(start_x, start_y, length, qty, spacing, prnt):
+    output = ["", "", ";Straight Line Testing",
+              f";\tstart_x : {start_x}",
+              f";\tstart_y : {start_y}",
+              f";\tlength : {length}",
+              f";\tqty : {qty}"]
+    
+    output.extend(absolute())
+    output.extend(movePrintHead(start_x, start_y-5, 5+prnt.print_height, prnt))
+    output.extend(moveZ(prnt.print_height, prnt))
+    output.extend(relative())
+    for i in range(qty):
+        output.extend(movePrintHead(0, 5, -5, prnt))
+        output.extend(printY(length, prnt))
+        output.extend(movePrintHead(0, 5, 5, prnt))
+        output.extend(movePrintHead(spacing, -length-5, 0, prnt))
+    
+
+    output.extend(moveZ(10, prnt))
+    return output
+
+def capture_print(camera_id, x, y, z, prnt):
+    output = [""]
+    output.extend(f";;; CAPTURE: {camera_id}, {x}, {y}, {z}")
     return output
