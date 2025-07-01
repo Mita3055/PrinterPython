@@ -12,58 +12,12 @@ def retract(prnt):
     return output
 
 def printX(x_move, prnt):
-    if hasattr(prnt, 'pressure_passed') and prnt.pressure_passed and abs(x_move) > 1:
-        # Segment the line if pressure_passed is True and line is longer than 1mm
-        segment_length = getattr(prnt, 'segment_length', 1.0)  # Default to 1mm if not set
-        segments = []
-        remaining_move = x_move
-        current_pos = 0
-        
-        while abs(remaining_move) > 1:
-            if abs(remaining_move) >= segment_length:
-                # Full segment
-                segment_move = segment_length if remaining_move > 0 else -segment_length
-                segments.append(f"G1 X{segment_move} E{-prnt.extrusion*abs(segment_move):f} F{prnt.feed_rate}")
-                remaining_move -= segment_move
-            else:
-                # Final segment - keep original length if less than 1mm
-                if abs(remaining_move) < 1:
-                    segments.append(f"G1 X{remaining_move} E{-prnt.extrusion*abs(remaining_move):f} F{prnt.feed_rate}")
-                else:
-                    segments.append(f"G1 X{remaining_move} E{-prnt.extrusion*abs(remaining_move):f} F{prnt.feed_rate}")
-                break
-        return segments
-    else:
-        # Original behavior for non-pressure_passed or short lines
-        output = [f"G1 X{x_move} E{-prnt.extrusion*abs(x_move):f} F{prnt.feed_rate}"]
-        return output
+    output = [f"G1 X{x_move} E{-prnt.extrusion*abs(x_move):f} F{prnt.feed_rate}"]
+    return output
 
 def printY(y_move, prnt):
-    if hasattr(prnt, 'pressure_passed_extrusion') and prnt.pressure_passed_extrusion and abs(y_move) > 1:
-        # Segment the line if pressure_passed_extrusion is True and line is longer than 1mm
-        segment_length = getattr(prnt, 'segment_length', 1.0)  # Default to 1mm if not set
-        segments = []
-        remaining_move = y_move
-        current_pos = 0
-        
-        while abs(remaining_move) > 1:
-            if abs(remaining_move) >= segment_length:
-                # Full segment
-                segment_move = segment_length if remaining_move > 0 else -segment_length
-                segments.append(f"G1 Y{segment_move} E{-prnt.extrusion*abs(segment_move):f} F{prnt.feed_rate}")
-                remaining_move -= segment_move
-            else:
-                # Final segment - keep original length if less than 1mm
-                if abs(remaining_move) < 1:
-                    segments.append(f"G1 Y{remaining_move} E{-prnt.extrusion*abs(remaining_move):f} F{prnt.feed_rate}")
-                else:
-                    segments.append(f"G1 Y{remaining_move} E{-prnt.extrusion*abs(remaining_move):f} F{prnt.feed_rate}")
-                break
-        return segments
-    else:
-        # Original behavior for non-pressure_passed_extrusion or short lines
-        output = [f"G1 Y{y_move} E{-prnt.extrusion*abs(y_move):f} F{prnt.feed_rate}"]
-        return output
+    output = [f"G1 Y{y_move} E{-prnt.extrusion*abs(y_move):f} F{prnt.feed_rate}"]
+    return output
 
 def moveX(x_move, prnt):
     output = [f"G1 X{x_move} F{prnt.movement_speed}"]
@@ -574,6 +528,65 @@ def lattice(start_x, start_y, rows, cols, spacing, prnt):
 
     return output
 
+def lattice_3d(start_x, start_y, rows, cols, spacing, layers, layer_height, prnt):
+    output = ["",
+                "",
+                ";Printing 3D Lattice/Grid",
+                f";\tstart_x : {start_x}",
+                f";\tstart_y : {start_y}",
+                f";\thorizontal_lines : {cols}",
+                f";\tvertical_lines : {rows}",
+                f";\spacing : {spacing}",
+                f";\tlayers : {layers}",
+                f";\tlayer_height : {layer_height}"]
+
+    output.extend(absolute())
+    output.extend(movePrintHead(start_x, start_y-spacing, 5, prnt))
+    output.extend(moveZ(prnt.print_height, prnt))
+    output.extend(relative())
+
+    output.extend(printY(5,prnt))
+    
+    for layer in range(layers):
+        # Vertical Sections:
+        for i in range(rows):
+            if i % 2 == 0:
+                output.extend(printY(spacing * cols, prnt))
+            else:
+                output.extend(printY(-spacing * cols, prnt))
+            output.extend(printX(spacing, prnt))
+
+        if rows % 2 == 0:
+            output.extend(printY(spacing * cols, prnt))
+
+            for i in range(cols):
+                if i % 2 == 0:
+                    output.extend(printX(-spacing * rows, prnt))
+                    output.extend(printY(-spacing, prnt))
+                else:
+                    output.extend(printX(spacing * rows, prnt))
+                    output.extend(printY(-spacing, prnt))
+            output.extend(printX(-5-spacing-spacing*cols, prnt))
+
+        else:
+            output.extend(printY(-spacing * cols, prnt))
+
+            for i in range(cols):
+                if i % 2 == 0:
+                    output.extend(printX(-spacing * rows, prnt))
+                    output.extend(printY(spacing, prnt))
+                else:
+                    output.extend(printX(spacing * rows, prnt))
+                    output.extend(printY(spacing, prnt))
+
+            output.extend(printX(5+cols*spacing, prnt))
+        
+        # Move to next layer
+        if layer < layers - 1:
+            output.extend(moveZ(layer_height, prnt))
+
+    return output
+
 # Stright Line Test
 
 def straight_line(start_x, start_y, length, qty, spacing, prnt):
@@ -597,7 +610,7 @@ def straight_line(start_x, start_y, length, qty, spacing, prnt):
     output.extend(moveZ(10, prnt))
     return output
 
-def capture_print(camera_id, x, y, z, prnt):
+def capture_print(x, y, z, prnt):
     output = [""]
-    output.extend(f";;; CAPTURE: {camera_id}, {x}, {y}, {z}")
+    output.extend(f";;; CAPTURE:  {x}, {y}, {z}")
     return output

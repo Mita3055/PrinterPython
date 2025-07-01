@@ -1,163 +1,250 @@
 import cv2
 import numpy as np
 import os
+import threading
+import time
+from datetime import datetime
 
-# Example usage:
-# cam0 = Camera(camera_id=0)
-# cam1 = Camera(camera_id=1)
-# cam0.calibrate()
-# cam1.calibrate()
-# frame0 = cam0.read()
-# frame1 = cam1.read()
-# cam0.release()
-# cam1.release()
+# Camera system for Raspberry Pi
+# Camera 1: Image capture with focus control
+# Camera 2 & 3: Continuous video recording
+# Preview functionality for all cameras
 
-
-class Camera:
-    def __init__(self, camera_id=0, calibration_file=None):
-        self.camera_id = camera_id
-        self.cap = cv2.VideoCapture(camera_id)
-        self.calibration_file = calibration_file or f"camera_{camera_id}_calibration.npz"
-        self.mtx = None
-        self.dist = None
-        if os.path.exists(self.calibration_file):
-            self.load_calibration()
-
-    def calibrate(self, chessboard_size=(9,6), square_size=1.0):
-        """
-        Calibrate the camera using chessboard images.
-        chessboard_size: (columns, rows) of inner corners.
-        square_size: size of a square in your defined unit (e.g., millimeters).
-        """
-        objp = np.zeros((chessboard_size[1]*chessboard_size[0],3), np.float32)
-        objp[:,:2] = np.mgrid[0:chessboard_size[0],0:chessboard_size[1]].T.reshape(-1,2)
-        objp *= square_size
-
-        objpoints = []
-        imgpoints = []
-
-        print(f"Camera {self.camera_id}: Press SPACE to capture chessboard images. Press ESC when done.")
-
-        while True:
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            found, corners = cv2.findChessboardCorners(gray, chessboard_size, None)
-            display = frame.copy()
-            if found:
-                cv2.drawChessboardCorners(display, chessboard_size, corners, found)
-            cv2.imshow(f'Calibration Camera {self.camera_id}', display)
-            key = cv2.waitKey(1)
-            if key == 27:  # ESC
-                break
-            elif key == 32 and found:  # SPACE
-                objpoints.append(objp)
-                imgpoints.append(corners)
-                print(f"Captured image {len(objpoints)}")
-
-        cv2.destroyAllWindows()
-
-        if len(objpoints) < 5:
-            print("Not enough images for calibration.")
+class CameraSystem:
+    def __init__(self):
+        self.cameras = {}
+        self.recording_threads = {}
+        self.preview_active = False
+        self.preview_thread = None
+        
+    def initialize_camera(self, camera_id, resolution=(1920, 1080)):
+        """Initialize a camera with specified resolution"""
+        try:
+            cap = cv2.VideoCapture(camera_id)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
+            
+            if not cap.isOpened():
+                print(f"Failed to open camera {camera_id}")
+                return False
+                
+            self.cameras[camera_id] = cap
+            print(f"Camera {camera_id} initialized successfully")
+            return True
+            
+        except Exception as e:
+            print(f"Error initializing camera {camera_id}: {e}")
             return False
-
-        # Initialize camera matrix and distortion coefficients
-        img_size = gray.shape[::-1]
-        camera_matrix = np.zeros((3, 3))
-        camera_matrix[0, 0] = 1.0  # focal length
-        camera_matrix[1, 1] = 1.0  # focal length
-        camera_matrix[0, 2] = img_size[0] / 2.0  # principal point x
-        camera_matrix[1, 2] = img_size[1] / 2.0  # principal point y
-        camera_matrix[2, 2] = 1.0
+    
+    def set_focus(self, camera_id, focus_value):
+        """Set focus for camera (works best with camera 1)"""
+        if camera_id in self.cameras:
+            self.cameras[camera_id].set(cv2.CAP_PROP_FOCUS, focus_value)
+            print(f"Camera {camera_id} focus set to {focus_value}")
+    
+    def capture_image(self, camera_id, filename, focus_value=None):
+        """Capture a single image from specified camera"""
+        if camera_id not in self.cameras:
+            print(f"Camera {camera_id} not initialized")
+            return False
+            
+        try:
+            if focus_value is not None:
+                self.set_focus(camera_id, focus_value)
+                
+            ret, frame = self.cameras[camera_id].read()
+            if ret:
+                cv2.imwrite(filename, frame)
+                print(f"Image captured: {filename}")
+                return True
+            else:
+                print(f"Failed to capture image from camera {camera_id}")
+                return False
+                
+        except Exception as e:
+            print(f"Error capturing image: {e}")
+            return False
+    
+    def start_recording(self, camera_id, output_folder, filename_prefix="video"):
+        """Start continuous video recording for cameras 2 & 3"""
+        if camera_id not in self.cameras:
+            print(f"Camera {camera_id} not initialized")
+            return False
+            
+        if camera_id in self.recording_threads and self.recording_threads[camera_id].is_alive():
+            print(f"Camera {camera_id} is already recording")
+            return False
+            
+        # Create output folder if it doesn't exist
+        os.makedirs(output_folder, exist_ok=True)
         
-        dist_coeffs = np.zeros(5)
+        # Start recording thread
+        thread = threading.Thread(target=self._record_video, 
+                                args=(camera_id, output_folder, filename_prefix))
+        thread.daemon = True
+        thread.start()
+        self.recording_threads[camera_id] = thread
         
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-            objpoints, imgpoints, img_size, camera_matrix, dist_coeffs)
-        np.savez(self.calibration_file, mtx=mtx, dist=dist)
-        self.mtx = mtx
-        self.dist = dist
-        print(f"Calibration complete. Saved to {self.calibration_file}")
+        print(f"Started recording camera {camera_id}")
         return True
+    
+    def _record_video(self, camera_id, output_folder, filename_prefix):
+        """Internal method for video recording thread"""
+        try:
+            cap = self.cameras[camera_id]
+            
+            # Get camera properties
+            frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = 30
+            
+            # Create video writer
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+            filename = os.path.join(output_folder, f"{filename_prefix}_cam{camera_id}_{timestamp}.mp4")
+            
+            out = cv2.VideoWriter(filename, fourcc, fps, (frame_width, frame_height))
+            
+            print(f"Recording to: {filename}")
+            
+            while camera_id in self.recording_threads:
+                ret, frame = cap.read()
+                if ret:
+                    out.write(frame)
+                else:
+                    print(f"Failed to read frame from camera {camera_id}")
+                    break
+                    
+                time.sleep(1/fps)  # Control frame rate
+                
+            out.release()
+            print(f"Recording stopped for camera {camera_id}")
+            
+        except Exception as e:
+            print(f"Error in recording thread for camera {camera_id}: {e}")
+    
+    def stop_recording(self, camera_id):
+        """Stop recording for specified camera"""
+        if camera_id in self.recording_threads:
+            del self.recording_threads[camera_id]
+            print(f"Stopped recording camera {camera_id}")
+    
+    def open_camera_preview(self):
+        """Open preview window showing all cameras"""
+        if self.preview_active:
+            print("Preview already active")
+            return
+            
+        self.preview_active = True
+        self.preview_thread = threading.Thread(target=self._preview_loop)
+        self.preview_thread.daemon = True
+        self.preview_thread.start()
+        print("Camera preview opened")
+    
+    def close_camera_preview(self):
+        """Close preview window"""
+        self.preview_active = False
+        if self.preview_thread:
+            self.preview_thread.join(timeout=1)
+        cv2.destroyAllWindows()
+        print("Camera preview closed")
+    
+    def _preview_loop(self):
+        """Internal method for preview display"""
+        try:
+            while self.preview_active:
+                frames = {}
+                
+                # Capture frames from all cameras
+                for camera_id, cap in self.cameras.items():
+                    ret, frame = cap.read()
+                    if ret:
+                        frames[camera_id] = frame
+                
+                if frames:
+                    # Create combined preview
+                    preview_frames = []
+                    for camera_id in sorted(frames.keys()):
+                        frame = frames[camera_id]
+                        # Resize for preview
+                        frame = cv2.resize(frame, (640, 480))
+                        cv2.putText(frame, f"Camera {camera_id}", (10, 30), 
+                                  cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                        preview_frames.append(frame)
+                    
+                    # Combine frames horizontally
+                    if len(preview_frames) == 1:
+                        combined = preview_frames[0]
+                    elif len(preview_frames) == 2:
+                        combined = np.hstack(preview_frames)
+                    else:
+                        # Stack 3 cameras in a 2x2 grid (with one empty)
+                        top_row = np.hstack(preview_frames[:2])
+                        bottom_row = np.hstack([preview_frames[2], np.zeros_like(preview_frames[0])])
+                        combined = np.vstack([top_row, bottom_row])
+                    
+                    cv2.imshow("Camera Preview", combined)
+                    
+                    # Check for key press to close
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break
+                
+                time.sleep(0.033)  # ~30 FPS
+                
+        except Exception as e:
+            print(f"Error in preview loop: {e}")
+        finally:
+            cv2.destroyAllWindows()
+    
+    def release_all(self):
+        """Release all camera resources"""
+        self.close_camera_preview()
+        
+        for camera_id in list(self.recording_threads.keys()):
+            self.stop_recording(camera_id)
+        
+        for camera_id, cap in self.cameras.items():
+            cap.release()
+        
+        self.cameras.clear()
+        print("All cameras released")
 
-    def load_calibration(self):
-        if not os.path.exists(self.calibration_file):
-            raise FileNotFoundError(f"Calibration file {self.calibration_file} not found. Please calibrate first.")
-        data = np.load(self.calibration_file)
-        self.mtx = data['mtx']
-        self.dist = data['dist']
+# Global camera system instance
+camera_system = CameraSystem()
 
-    def undistort(self, frame):
-        if self.mtx is None or self.dist is None:
-            raise ValueError("Camera is not calibrated. Please calibrate or load calibration first.")
-        return cv2.undistort(frame, self.mtx, self.dist, None, self.mtx)
+# Convenience functions for main.py
+def initialize_cameras():
+    """Initialize all cameras (1, 2, 3)"""
+    success = True
+    for camera_id in [1, 2, 3]:
+        if not camera_system.initialize_camera(camera_id):
+            success = False
+    return success
 
-    def read(self, undistort=True):
-        ret, frame = self.cap.read()
-        if not ret:
-            return None
-        if undistort and self.mtx is not None and self.dist is not None:
-            frame = self.undistort(frame)
-        return frame
+def start_recording(camera_id, output_folder):
+    """Start recording for camera 2 or 3"""
+    return camera_system.start_recording(camera_id, output_folder)
 
-    def release(self):
-        self.cap.release()
+def capture_image(camera_id, filename, focus_value=None):
+    """Capture image from camera 1"""
+    return camera_system.capture_image(camera_id, filename, focus_value)
 
-def Capture(camera_id=0, filename="capture.png", undistort=True):
-    """
-    Capture a photograph from the specified camera and save it to a file.
-    """
-    cam = Camera(camera_id=camera_id)
-    # Try to set to a high resolution (modify as needed for your camera)
-    for width, height in [(3840,2160), (1920,1080), (1280,720)]:
-        cam.cap.set(3, width)
-        cam.cap.set(4, height)
-        actual_width = cam.cap.get(3)
-        actual_height = cam.cap.get(4)
-        if actual_width == width and actual_height == height:
-            break
+def set_camera_focus(camera_id, focus_value):
+    """Set focus for camera"""
+    camera_system.set_focus(camera_id, focus_value)
 
-    frame = cam.read(undistort=undistort)
-    if frame is not None:
-        cv2.imwrite(filename, frame)
-        print(f"Image saved as {filename}")
-    else:
-        print("Failed to capture image.")
-    cam.release()
+def open_preview():
+    """Open camera preview"""
+    camera_system.open_camera_preview()
 
-def RecordVideo(camera_id=0, filename="capture.avi", duration=5, fps=30, undistort=True):
-    """
-    Record a video from the specified camera and save it to a file.
-    duration: seconds to record
-    fps: frames per second
-    """
-    cam = Camera(camera_id=camera_id)
-    # Try to set to a high resolution (modify as needed for your camera)
-    for width, height in [(3840,2160), (1920,1080), (1280,720)]:
-        cam.cap.set(3, width)
-        cam.cap.set(4, height)
-        actual_width = int(cam.cap.get(3))
-        actual_height = int(cam.cap.get(4))
-        if actual_width == width and actual_height == height:
-            break
+def close_preview():
+    """Close camera preview"""
+    camera_system.close_camera_preview()
 
-    # Use the actual resolution
-    frame_width = int(cam.cap.get(3))
-    frame_height = int(cam.cap.get(4))
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter(filename, fourcc, fps, (frame_width, frame_height))
+def release_cameras():
+    """Release all cameras"""
+    camera_system.release_all()
 
-    frame_count = int(duration * fps)
-    for _ in range(frame_count):
-        frame = cam.read(undistort=undistort)
-        if frame is not None:
-            out.write(frame)
-        else:
-            print("Frame capture failed.")
-            break
 
-    out.release()
-    cam.release()
-    print(f"Video saved as {filename}")
+
 

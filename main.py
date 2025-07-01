@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 from klipper_controller import KlipperController
 from utills.loadcell import getLoad, initialize_loadcell
-from utills.camera import Camera, Capture
+from utills.camera import initialize_cameras, start_recording, capture_image, set_camera_focus, open_preview, close_preview, release_cameras
 from utills.g_code_comands import *
 from data_collection import DataCollector
 
@@ -72,15 +72,16 @@ def generate_toolpath(prnt, cap):
 
     # Spape Fidelity Test
     toolpath.extend(lattice(start_x=10, start_y=40, rows=5, cols=5, spacing=3, prnt=prnt))
-    toolpath.extend(capture_print(camera_id=1, x=17.5, y=0, z=60, prnt=prnt))
+    toolpath.extend(capture_print(x=17.5, y=0, z=60, prnt=prnt))
     toolpath.extend(contracting_square_wave(start_x=40, start_y=40, height=40, width=5, iterations=5, shrink_rate=0.95, prnt=prnt))
-    toolpath.extend(capture_print(camera_id=1, x=7.5, y=17.5, z=0, prnt=prnt))
+    toolpath.extend(capture_print(x=7.5, y=17.5, z=0, prnt=prnt))
 
 
     # Striaght Line Test
-    straight_line(40, 90, 40, 5, 5, prnt)
-    toolpath.append(capture_print(camera_id=1, x=7.5, y=17.5, z=0, prnt=prnt))
+    toolpath.extend(straight_line(40, 90, 40, 5, 5, prnt))
+    toolpath.extend(capture_print(x=7.5, y=17.5, z=0, prnt=prnt))
     return toolpath
+
 def data_directory():
     """
     Create a timestamped directory within the data folder.
@@ -148,8 +149,19 @@ def main():
     
     # Initialize cameras
     print("Initializing cameras...")
-    camera1 = Camera(camera_id=1)
-    camera2 = Camera(camera_id=2)
+    if not initialize_cameras():
+        print("Warning: Some cameras failed to initialize")
+    
+    # Set focus for camera 1 (image capture camera)
+    set_camera_focus(1, 120)  # Adjust focus value as needed
+    
+    # Start continuous recording for cameras 2 & 3
+    data_folder = data_directory()
+    start_recording(2, data_folder)
+    start_recording(3, data_folder)
+    
+    # Open camera preview
+    open_preview()
     
     # Initialize printer and capacitor parameters
     print("Initializing printer and capacitor parameters...")
@@ -177,28 +189,24 @@ def main():
 
     for comand in toolpath:
         if "CAPTURE" in comand:
-            camera = comand.split(",")[1]
-            x = comand.split(",")[2]
-            y = comand.split(",")[3]
-            z = comand.split(",")[4]
+            x = comand.split(",")[1]
+            y = comand.split(",")[2]
+            z = comand.split(",")[3]
 
-            print(f"Capturing image from camera {camera} at {x}, {y}, {z}")
+            print(f"Capturing image from camera {1} at {x}, {y}, {z}")
             printer.send_gcode(absolute()[0])
             printer.send_gcode(movePrintHead(x, y, z, printer_profile)[0])
             
-            if camera == "1":
-                Capture(camera_id=1, filename=os.path.join(data_folder, f"camera1_{datetime.now().strftime('%H_%M_%S')}.png"))
-            elif camera == "2":
-                Capture(camera_id=2, filename=os.path.join(data_folder, f"camera2_{datetime.now().strftime('%H_%M_%S')}.png"))
-            else:
-                print(f"Warning: Unknown camera ID {camera}")
+            capture_image(1, os.path.join(data_folder, f"camera1_{datetime.now().strftime('%H_%M_%S')}.png"))
+            time.sleep(1)
 
-        elif pressure-based
+        else:
             printer.send_gcode(comand)
 
-
-
-            time.sleep(0.01)
     data_collector.stop_record_data()
+    
+    # Clean up cameras
+    close_preview()
+    release_cameras()
 
 main()

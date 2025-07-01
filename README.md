@@ -1,45 +1,62 @@
-# 3D Printer Control System
+# PrinterPython - 3D Printer Control System
 
-This repository contains a comprehensive 3D printer control system with pressure-based extrusion control, data collection capabilities, and automated printing workflows.
+A Python-based 3D printer control system with pressure feedback, camera monitoring, and automated toolpath generation.
 
-## File Structure and Purpose
+## Core Modules
 
-### Core Control Files
+### Main Control (`main.py`)
+- **KlipperController**: 3D printer communication and control
+- **DataCollector**: Real-time data logging and analysis
+- **Camera System**: Multi-camera monitoring and recording
+- **Pressure Controller**: Real-time extrusion rate adjustment
+- **Toolpath Generator**: Automated G-code generation
 
-#### `klipper_controller.py`
-- **Purpose**: Main controller for Klipper-based 3D printers
-- **Key Features**:
-  - Connects to Moonraker API for printer communication
-  - Provides movement control (X, Y, Z axes)
-  - Supports homing operations
-  - Real-time position monitoring
-  - Custom G-code command execution
-  - Interactive CLI interface
+### Key Functions
 
-#### `data_collection.py`
-- **Purpose**: Real-time data logging during printing operations
-- **Key Features**:
-  - Records position data (X, Y, Z, E) and load cell readings
-  - Threaded data collection with configurable intervals
-  - CSV output format for analysis
-  - Automatic file creation with headers
-  - Thread-safe start/stop operations
+#### Printer Control
+- `generate_toolpath()`: Creates G-code toolpath with patterns
+- `save_toolpath()`: Saves toolpath to timestamped directory
+- `data_directory()`: Creates organized data folders
 
-### Configuration and Utilities
+#### Camera System (`utills/camera.py`)
+- `initialize_cameras()`: Setup cameras 1, 2, 3
+- `start_recording()`: Continuous video recording (cameras 2&3)
+- `capture_image()`: Single image capture (camera 1)
+- `set_camera_focus()`: Adjust camera focus
+- `open_preview()` / `close_preview()`: Live camera preview
 
-#### `utills/configs.py`
-- **Purpose**: Configuration classes for printer and capacitor parameters
-- **Key Features**:
-  - `Printer` class with extrusion, retraction, and movement parameters
-  - `Capacitor` class for different capacitor designs
-  - Pressure-based extrusion control settings
-  - Predefined capacitor profiles (LargeCap, stdCap, electroCellCap)
+#### Pressure Control (`pressure_controller.py`)
+- `pressure_passed_extrusion()`: Real-time extrusion rate adjustment
+- `PressureController`: PD controller for pressure feedback
 
-#### `utills/g_code_comands.py`
-- **Purpose**: G-code command generation for printer movements
-- **Key Features**:
-  - Movement commands with extrusion control
-  - Pressure-based line segmentation
-  - Retraction commands
-  - Configurable feed rates and speeds
+#### G-Code Commands (`utills/g_code_comands.py`)
+- `printX()`, `printY()`: Extrusion movements
+- `movePrintHead()`: Position control
+- `lattice()`, `square_wave()`: Pattern generation
+- `capture_print()`: Camera trigger commands
 
+#### Data Collection (`data_collection.py`)
+- `DataCollector`: Real-time loadcell and sensor data logging
+
+#### Hardware Interfaces
+- `klipper_controller.py`: Klipper firmware communication
+- `utills/loadcell.py`: Load cell pressure measurement
+- `mettler_scale.py`: Scale integration
+
+## Configuration (`configs.py`)
+- Printer profiles (extrusion rates, speeds, heights)
+- Capacitor patterns and dimensions
+- Material-specific settings
+
+## Usage
+```bash
+python main.py
+```
+
+## Features
+- Multi-camera monitoring and recording
+- Real-time pressure-based extrusion control
+- Automated toolpath generation
+- Comprehensive data logging
+- Pattern printing (lattices, waves, capacitors)
+- Focus-adjustable image capture
