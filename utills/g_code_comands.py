@@ -614,9 +614,9 @@ def straight_line(start_x, start_y, length, qty, spacing, prnt):
     output.extend(moveZ(10, prnt))
     return output
 
-def capture_print(x, y, z, prnt):
+def capture_print(camera, x, y, z, prnt):
     output = [""]
-    output.extend(f";;; CAPTURE:  {x}, {y}, {z}")
+    output.extend(f";;; CAPTURE:  {camera}, {x}, {y}, {z}")
     return output
 
 
@@ -638,7 +638,7 @@ def ZB2_test(start_x, start_y, length, qty, spacing, prnt):
         output.extend(movePrintHead(spacing, -5, -5, prnt, extrusion=True))
         output.extend(printY(-length, prnt))
         output.extend(movePrintHead(spacing, -5, -5, prnt, extrusion=True))
-        
+
     return output
 
 

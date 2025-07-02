@@ -10,6 +10,10 @@ from datetime import datetime
 # Camera 2 & 3: Continuous video recording
 # Preview functionality for all cameras
 
+
+
+
+
 class CameraSystem:
     def __init__(self):
         self.cameras = {}
@@ -35,6 +39,15 @@ class CameraSystem:
         except Exception as e:
             print(f"Error initializing camera {camera_id}: {e}")
             return False
+    
+    def set_camera_resolution(self, camera_id, resolution):
+        """Set resolution for a specific camera"""
+        if camera_id in self.cameras:
+            self.cameras[camera_id].set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
+            self.cameras[camera_id].set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
+            print(f"Camera {camera_id} resolution set to {resolution[0]}x{resolution[1]}")
+        else:
+            print(f"Camera {camera_id} not found")
     
     def set_focus(self, camera_id, focus_value):
         """Set focus for camera (works best with camera 1)"""
