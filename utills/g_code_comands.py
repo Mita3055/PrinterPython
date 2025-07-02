@@ -1,10 +1,14 @@
 from tkinter import LEFT
 from configs import *
+import math
 
 # G Code Commands
 
-def movePrintHead(x_move, y_move, z_move, prnt):
-    output = [f"G1 X{x_move} Y{y_move} Z{z_move} F{prnt.movement_speed} "]
+def movePrintHead(x_move, y_move, z_move, prnt, extrusion=False):
+    if extrusion:
+        output = [f"G1 X{x_move} Y{y_move} Z{z_move} E{-prnt.extrusion*abs(math.sqrt(x_move**2 + y_move**2)):f} F{prnt.feed_rate}"]
+    else:
+        output = [f"G1 X{x_move} Y{y_move} Z{z_move} F{prnt.movement_speed} "]
     return output
 
 def retract(prnt):
@@ -614,3 +618,32 @@ def capture_print(x, y, z, prnt):
     output = [""]
     output.extend(f";;; CAPTURE:  {x}, {y}, {z}")
     return output
+
+
+def ZB2_test(start_x, start_y, length, qty, spacing, prnt):
+    output = ["", "", ";3D ZB2 Test",
+              f";\tstart_x : {start_x}",
+              f";\tstart_y : {start_y}",
+              f";\tlength : {length}",
+              f";\tqty : {qty}"]
+    
+    output.extend(absolute())
+    output.extend(movePrintHead(start_x, start_y-5, 5+prnt.print_height, prnt))
+
+    for i in range(qty):
+        output.extend(relative())
+        output.extend(movePrintHead(0, 5, -5, prnt, extrusion=True))
+        output.extend(printY(length, prnt))
+        output.extend(movePrintHead(0, 5, 5, prnt, extrusion=False))
+        output.extend(movePrintHead(spacing, -5, -5, prnt, extrusion=True))
+        output.extend(printY(-length, prnt))
+        output.extend(movePrintHead(spacing, -5, -5, prnt, extrusion=True))
+        
+    return output
+
+
+
+
+
+
+
