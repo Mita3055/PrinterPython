@@ -11,12 +11,13 @@ import os
 from datetime import datetime
 from klipper_controller import KlipperController
 from utills.loadcell import getLoad, initialize_loadcell
-from utills.camera import initialize_cameras, start_recording, capture_image, set_camera_focus, open_preview, close_preview, release_cameras, camera_system
+from camera_integration import *
 from utills.g_code_comands import *
 from data_collection import DataCollector
-
+import tkinter as tk
+from printer_gui import PrinterGUI
 from configs import *
-
+import threading
 
 """
 Steps:
@@ -140,40 +141,44 @@ def save_toolpath(toolpath, data_folder):
 def main():
 
     # Initialize controller (localhost since running on Pi)
-    print("Initializing printer controller...")
     printer = KlipperController(host="localhost", port=7125)
     
     # Initialize loadcell
-    print("Initializing loadcell...")
     initialize_loadcell()
     
-    # Initialize cameras with specific configurations
-    print("Initializing cameras...")
-    from utills.camera import initialize_cameras, start_recording, capture_image, set_camera_focus, open_preview, close_preview, release_cameras, camera_system
     
-    # Initialize camera system
-    if not initialize_cameras():
-        print("Warning: Some cameras failed to initialize")
-    
-    # Configure Camera 1: Focus control enabled, high resolution (8000x6000)
-    print("Configuring Camera 1 for high-resolution focus control...")
-    camera_system.set_camera_resolution(1, (8000, 6000))
-    set_camera_focus(1, 120)  # Enable focus control
-    
-    # Configure Camera 2: Still capture, standard resolution (1920x1080)
-    print("Configuring Camera 2 for still capture...")
-    camera_system.set_camera_resolution(2, (1920, 1080))
-    
-    # Configure Camera 3: Video recording, standard resolution (1920x1080)
-    print("Configuring Camera 3 for video recording...")
-    camera_system.set_camera_resolution(3, (1920, 1080))
-    
-    # Start continuous recording for cameras 2 & 3
+    # Create data folder and initialize camera system
     data_folder = data_directory()
-    start_recording(3, data_folder)
+
+
+    initialize_camera_system(data_folder)
+    cameras = list_cameras()
+
+
+    print(f"Available cameras: {len(cameras)}")
+    for camera in cameras:
+        print(f"  - {camera['name']} ({camera['id']}) at {camera['node']}")
     
-    # Open camera preview
-    open_preview()
+    # Configure camera focus settings
+    print("Configuring camera focus settings...")
+    camera_info = get_camera_info(1)  # Overhead Camera
+    if camera_info:
+        print(f"Overhead Camera: {camera_info['capture_resolution']} resolution")
+    
+    camera_info = get_camera_info(2)  # Side Camera  
+    if camera_info:
+        print(f"Side Camera: {camera_info['capture_resolution']} resolution")
+
+
+    #Opening printer GUI
+    
+    def run_gui():
+        root = tk.Tk()
+        app = PrinterGUI(root)
+        root.mainloop()
+    
+    gui_thread = threading.Thread(target=run_gui, daemon=True)
+    gui_thread.start()
     
     # Initialize printer and capacitor parameters
     print("Initializing printer and capacitor parameters...")
@@ -199,6 +204,15 @@ def main():
     data_collector = DataCollector()
     data_collector.record_print_data(printer, getLoad)
 
+
+
+    print("Ready to print.")
+    user_input = input("Do you want to proceed? (yes/no): ").lower().strip()
+    
+    if user_input not in ['yes', 'y']:
+        print("Print sequence cancelled by user.")
+        return
+    
     for comand in toolpath:
         if "CAPTURE" in comand:
             camera = comand.split(",")[1]
@@ -208,18 +222,43 @@ def main():
 
             print(f"Capturing image from camera {camera} at {x}, {y}, {z}")
             printer.send_gcode(absolute()[0])
-            printer.send_gcode(movePrintHead(x, y, z, printer_profile)[0])
+            printer.send_gcode(movePrintHead(0, 0, z, printer_profile)[0])
+            printer.send_gcode(movePrintHead(x, y, 0, printer_profile)[0])
             
-            capture_image(int(camera), os.path.join(data_folder, f"camera{camera}_{datetime.now().strftime('%H_%M_%S')}.png"))
+            # Use the new camera integration system for high-quality captures
+            timestamp = datetime.now().strftime("%H_%M_%S")
+            filename = f"camera{camera}_pos_{x}_{y}_{z}_{timestamp}.jpg"
+            
+            success, result = capture_image(
+                camera_id=int(camera), 
+                filename=filename,
+                method='fswebcam'  # Use fswebcam for high-resolution captures
+            )
+            
+            if success:
+                print(f"✓ Image captured: {result}")
+            else:
+                print(f"✗ Capture failed: {result}")
+            
             time.sleep(1)
 
         else:
             printer.send_gcode(comand)
+            time.sleep(0.01)
 
     data_collector.stop_record_data()
     
-    # Clean up cameras
-    close_preview()
-    release_cameras()
+    # Optional: Capture final images from all cameras
+    print("Capturing final images from all cameras...")
+    from camera_integration import capture_all_cameras
+    final_captures = capture_all_cameras(filename_prefix="final", method='fswebcam')
+    
+    for camera_id, (success, result) in final_captures.items():
+        if success:
+            print(f"✓ Final capture {camera_id}: {result}")
+        else:
+            print(f"✗ Final capture {camera_id} failed: {result}")
+    
+    print("Print sequence completed successfully!")
 
 main()
