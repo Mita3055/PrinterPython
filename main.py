@@ -10,7 +10,7 @@ import csv
 import os
 from datetime import datetime
 from klipper_controller import KlipperController
-from utills.loadcell import getLoad, initialize_loadcell
+#from utills.loadcell import getLoad, initialize_loadcell
 from utills.camera import initialize_cameras, start_recording, capture_image, set_camera_focus, open_preview, close_preview, release_cameras, camera_system
 from utills.g_code_comands import *
 from data_collection import DataCollector
@@ -140,15 +140,15 @@ def main():
 
     # Initialize controller (localhost since running on Pi)
     print("Initializing printer controller...")
-    printer = KlipperController(host="localhost", port=7125)
-    
+    printer = KlipperController()
+    printer.connect()
     # Initialize loadcell
     print("Initializing loadcell...")
-    initialize_loadcell()
+    #initialize_loadcell()
     
     # Initialize cameras with specific configurations
-    print("Initializing cameras...")
-    from utills.camera import initialize_cameras, start_recording, capture_image, set_camera_focus, open_preview, close_preview, release_cameras, camera_system
+    #print("Initializing cameras...")
+    #from utills.camera import initialize_cameras, start_recording, capture_image, set_camera_focus, open_preview, close_preview, release_cameras, camera_system
     
     data_folder = data_directory()
     
@@ -161,6 +161,9 @@ def main():
     printer_profile = MXeneProfile_pet_25G  # Example: using PET 25G profile
     capacitor_profile = stdCap  # Example: using standard capacitor
     
+    printer_profile.print_height = 2.5
+    printer_profile.bed_height = 2.5
+
     # Enable pressure-based extrusion if needed
     # printer_profile.constPressure(target_pressure=5.0)  # Uncomment and set target pressure
     
@@ -173,10 +176,10 @@ def main():
     data_folder = data_directory()
 
     toolpath = generate_toolpath(prnt=printer_profile, cap=capacitor_profile)
-    save_toolpath(toolpath, data_folder)
+    # save_toolpath(toolpath, data_folder)
 
-    data_collector = DataCollector()
-    data_collector.record_print_data(printer, getLoad)
+    #data_collector = DataCollector()
+    #data_collector.record_print_data(printer, getLoad)
 
     for comand in toolpath:
         if "CAPTURE" in comand:
@@ -195,6 +198,6 @@ def main():
         else:
             printer.send_gcode(comand)
 
-    data_collector.stop_record_data()
+    #data_collector.stop_record_data()
     
 main()
