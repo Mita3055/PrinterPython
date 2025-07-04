@@ -446,64 +446,67 @@ gcode G1 X50 F6000   - Send custom linear move command
         print(help_text)
 
 def main():
-    """Main function with command line argument parsing"""
-    parser = argparse.ArgumentParser(description="Simplified Klipper Controller - Movement Only")
-    parser.add_argument('--host', default='localhost', help='Moonraker host (default: localhost)')
-    parser.add_argument('--port', type=int, default=7125, help='Moonraker port (default: 7125)')
-    parser.add_argument('--timeout', type=int, default=10, help='Request timeout (default: 10s)')
+    """Main function - Connect and home printer for diagnostics"""
+    print("=== Klipper Connection & Homing Test ===")
+    print("This will test connection and attempt to home the printer")
+    print("Use Ctrl+C to stop at any time")
+    print()
     
-    # Command line operations
-    parser.add_argument('--home', metavar='AXES', help='Home specified axes (XYZ, XY, Z, etc.)')
-    parser.add_argument('--move', nargs='+', metavar='COORD', help='Move to coordinates (x10 y20 z5)')
-    parser.add_argument('--position', action='store_true', help='Show current position and exit')
-    parser.add_argument('--monitor', type=float, metavar='INTERVAL', help='Start position monitoring with interval')
-    parser.add_argument('--gcode', metavar='COMMAND', help='Send G-code command')
+    # Create controller with default settings
+    controller = KlipperController()
     
-    args = parser.parse_args()
-    
-    # Create controller
-    controller = KlipperController(args.host, args.port, args.timeout)
-    
+    # Step 1: Test connection
+    print("Step 1: Testing connection...")
     if not controller.connect():
-        print("Failed to connect to printer. Exiting.")
+        print("❌ Connection failed!")
+        print("\nTroubleshooting tips:")
+        print("- Make sure Moonraker is running on your Raspberry Pi")
+        print("- Check if the printer is powered on and connected")
+        print("- Verify Moonraker is accessible at http://localhost:7125")
+        print("- Try running: curl http://localhost:7125/printer/info")
         sys.exit(1)
     
-    # Handle command line operations
-    if args.position:
-        controller.print_position()
-        return
-        
-    if args.home:
-        controller.home_axes(args.home)
-        
-    if args.move:
-        x = y = z = feedrate = None
-        for arg in args.move:
-            if arg.startswith('x'):
-                x = float(arg[1:])
-            elif arg.startswith('y'):
-                y = float(arg[1:])
-            elif arg.startswith('z'):
-                z = float(arg[1:])
-            elif arg.startswith('f'):
-                feedrate = int(arg[1:])
-        controller.move_to(x, y, z, feedrate or 3000)
-        
-    if args.monitor:
-        controller.start_position_monitoring(args.monitor)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            controller.stop_position_monitoring()
-            
-    if args.gcode:
-        controller.send_gcode(args.gcode)
+    print("✅ Connection successful!")
+    print()
     
-    # If no specific commands, run interactive mode
-    if not any([args.home, args.move, args.position, args.monitor, args.gcode]):
-        cli = PrinterCLI()
-        cli.run_interactive()
+    # Step 2: Show current position
+    print("Step 2: Current position:")
+    controller.print_position()
+    print()
+    
+    # Step 3: Check if already homed
+    print("Step 3: Checking homing status...")
+    homed_axes = controller.get_homed_axes()
+    if homed_axes:
+        print(f"✅ Axes already homed: {homed_axes.upper()}")
+    else:
+        print("⚠️  Printer not homed - will attempt to home")
+    print()
+    
+    # Step 4: Attempt homing
+    print("Step 4: Homing printer...")
+    print("This will home all axes (XYZ)")
+    print("Make sure the print area is clear!")
+    
+    try:
+        if controller.home_axes("XYZ"):
+            print("✅ Homing completed successfully!")
+        else:
+            print("❌ Homing failed!")
+    except KeyboardInterrupt:
+        print("\n⚠️  Homing interrupted by user")
+    except Exception as e:
+        print(f"❌ Homing error: {e}")
+    
+    print()
+    
+    # Step 5: Show final position
+    print("Step 5: Final position:")
+    controller.print_position()
+    print()
+    
+    print("=== Test Complete ===")
+    print("If all steps passed, your printer connection is working correctly!")
 
 if __name__ == "__main__":
     main()

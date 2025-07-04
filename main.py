@@ -14,7 +14,6 @@ from utills.loadcell import getLoad, initialize_loadcell
 from utills.camera import initialize_cameras, start_recording, capture_image, set_camera_focus, open_preview, close_preview, release_cameras, camera_system
 from utills.g_code_comands import *
 from data_collection import DataCollector
-
 from configs import *
 
 
@@ -74,12 +73,12 @@ def generate_toolpath(prnt, cap):
     toolpath.extend(lattice(start_x=10, start_y=40, rows=5, cols=5, spacing=3, prnt=prnt))
     toolpath.extend(capture_print(camera=1, x=17.5, y=0, z=60, prnt=prnt))
     toolpath.extend(contracting_square_wave(start_x=40, start_y=40, height=40, width=5, iterations=5, shrink_rate=0.95, prnt=prnt))
-    toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, prnt=prnt))
+    #toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, prnt=prnt))
 
 
     # Striaght Line Test
     toolpath.extend(straight_line(40, 90, 40, 5, 5, prnt))
-    toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, prnt=prnt))
+    #toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, prnt=prnt))
     return toolpath
 
 def data_directory():
@@ -151,29 +150,9 @@ def main():
     print("Initializing cameras...")
     from utills.camera import initialize_cameras, start_recording, capture_image, set_camera_focus, open_preview, close_preview, release_cameras, camera_system
     
-    # Initialize camera system
-    if not initialize_cameras():
-        print("Warning: Some cameras failed to initialize")
-    
-    # Configure Camera 1: Focus control enabled, high resolution (8000x6000)
-    print("Configuring Camera 1 for high-resolution focus control...")
-    camera_system.set_camera_resolution(1, (8000, 6000))
-    set_camera_focus(1, 120)  # Enable focus control
-    
-    # Configure Camera 2: Still capture, standard resolution (1920x1080)
-    print("Configuring Camera 2 for still capture...")
-    camera_system.set_camera_resolution(2, (1920, 1080))
-    
-    # Configure Camera 3: Video recording, standard resolution (1920x1080)
-    print("Configuring Camera 3 for video recording...")
-    camera_system.set_camera_resolution(3, (1920, 1080))
-    
-    # Start continuous recording for cameras 2 & 3
     data_folder = data_directory()
-    start_recording(3, data_folder)
     
     # Open camera preview
-    open_preview()
     
     # Initialize printer and capacitor parameters
     print("Initializing printer and capacitor parameters...")
@@ -218,8 +197,4 @@ def main():
 
     data_collector.stop_record_data()
     
-    # Clean up cameras
-    close_preview()
-    release_cameras()
-
 main()
