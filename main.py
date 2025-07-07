@@ -140,7 +140,8 @@ def main():
 
     # Initialize controller (localhost since running on Pi)
     print("Initializing printer controller...")
-    printer = KlipperController(host="localhost", port=7125)
+    printer = KlipperController()
+    printer.connect()
     
     # Initialize loadcell
     print("Initializing loadcell...")
