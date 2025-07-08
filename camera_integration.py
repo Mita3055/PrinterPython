@@ -1,230 +1,369 @@
 #!/usr/bin/env python3
 """
-Camera Integration Module
-Bridges the multi-camera GUI system with the main printing workflow
+Standalone Camera Integration System
+Simplified camera management without external dependencies
 """
 
+import cv2
+import subprocess
 import os
-import sys
 import time
+import threading
 from datetime import datetime
-from Camera.camera_manager import (
-    VIDEO_DEVICES, 
-    capture_still_fswebcam, 
-    capture_still_opencv,
-    set_camera_focus,
-    check_dependencies,
-    check_camera_permissions
-)
+from typing import Dict, Tuple, Optional, List
 
-class CameraIntegration:
+# Camera configuration
+CAMERAS = {
+    1: {
+        'name': 'Overhead Camera',
+        'node': '/dev/video0',
+        'capture_resolution': (8000, 6000),
+        'preview_resolution': (640, 480),
+        'focus_value': 120,
+        'rotate': True
+    },
+    2: {
+        'name': 'Side Camera', 
+        'node': '/dev/video2',
+        'capture_resolution': (1920, 1080),
+        'preview_resolution': (640, 480),
+        'focus_value': 120,
+        'rotate': False
+    }
+}
+
+# Global state
+camera_system_initialized = False
+current_data_folder = "data"
+gui_instance = None
+
+def initialize_camera_system(data_folder: str = "data") -> bool:
     """
-    Integration class that provides capture commands for main.py
-    while utilizing the advanced multi-camera system
+    Initialize the camera system
+    
+    Args:
+        data_folder: Folder to save captured images
+        
+    Returns:
+        bool: True if initialization successful
     """
+    global camera_system_initialized, current_data_folder
     
-    def __init__(self, data_folder=None):
-        self.data_folder = data_folder or "data"
-        self.app_instance = None  # Will be set if GUI is running
-        self.initialized = False
-        
-    def initialize(self):
-        """Initialize the camera system"""
-        print("Initializing multi-camera system...")
-        
-        # Check dependencies
-        if not check_dependencies():
-            print("Warning: Some camera dependencies missing")
-        
-        # Check camera permissions
-        if not check_camera_permissions():
-            print("Warning: Camera permission issues detected")
-        
-        # Set focus for cameras that support it
-        for device_id, config in VIDEO_DEVICES.items():
-            if config.get('focus_value') is not None:
-                set_camera_focus(config['node'], config['focus_value'])
-        
-        self.initialized = True
-        print("Multi-camera system initialized")
-        return True
+    print("Initializing camera system...")
     
-    def set_data_folder(self, folder_path):
-        """Set the data folder for saving captures"""
-        self.data_folder = folder_path
-        os.makedirs(folder_path, exist_ok=True)
-        print(f"Camera data folder set to: {folder_path}")
+    # Set data folder
+    current_data_folder = data_folder
+    if not os.path.exists(current_data_folder):
+        os.makedirs(current_data_folder)
+        print(f"Created data folder: {current_data_folder}")
     
-    def capture_image(self, camera_id, filename=None, method='fswebcam'):
-        """
-        Capture an image from the specified camera
-        
-        Args:
-            camera_id: Camera identifier (1, 2, etc. or 'video0', 'video2')
-            filename: Optional filename, will generate timestamped name if None
-            method: 'fswebcam' or 'opencv'
-        
-        Returns:
-            tuple: (success: bool, filename: str or error_message: str)
-        """
-        if not self.initialized:
-            print("Camera system not initialized")
-            return (False, "Camera system not initialized")
-        
-        # Map camera_id to device configuration
-        device_config = self._get_device_config(camera_id)
-        if not device_config:
-            return (False, f"Camera {camera_id} not found")
-        
-        # Generate filename if not provided
-        if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            camera_name = device_config['name'].replace(' ', '_')
-            filename = f"{camera_name}_{timestamp}.jpg"
-        
-        # Ensure filename is in data folder
-        if not os.path.isabs(filename):
-            filename = os.path.join(self.data_folder, filename)
-        
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        
-        print(f"Capturing image from {device_config['name']}...")
-        
-        # Choose capture method
-        if method.lower() == 'fswebcam':
-            success, result = capture_still_fswebcam(device_config, self.app_instance)
-        elif method.lower() == 'opencv':
-            success, result = capture_still_opencv(device_config, self.app_instance)
-        else:
-            return (False, f"Unknown capture method: {method}")
-        
-        if success:
-            # Move file to desired location if it was saved elsewhere
-            if result != filename and os.path.exists(result):
-                import shutil
-                shutil.move(result, filename)
-                result = filename
-            
-            print(f"✓ Image captured: {filename}")
-            return (True, filename)
-        else:
-            print(f"✗ Capture failed: {result}")
-            return (False, result)
+    # Check camera availability
+    available_cameras = check_camera_availability()
+    if available_cameras == 0:
+        print("⚠️  No cameras available!")
+        return False
     
-    def set_gui_instance(self, gui_instance):
-        """Set the GUI instance for preview management during captures"""
-        self.app_instance = gui_instance
+    print(f"✓ Camera system initialized with {available_cameras} camera(s)")
+    camera_system_initialized = True
+    return True
+
+def check_camera_availability() -> int:
+    """Check which cameras are available and accessible"""
+    available = 0
     
-    def capture_all_cameras(self, filename_prefix=None, method='fswebcam'):
-        """
-        Capture images from all available cameras
-        
-        Args:
-            filename_prefix: Optional prefix for filenames
-            method: 'fswebcam' or 'opencv'
-        
-        Returns:
-            dict: {camera_id: (success, filename_or_error)}
-        """
-        results = {}
-        
-        for device_id, config in VIDEO_DEVICES.items():
-            camera_name = config['name'].replace(' ', '_')
-            if filename_prefix:
-                filename = f"{filename_prefix}_{camera_name}.jpg"
+    for camera_id, config in CAMERAS.items():
+        if os.path.exists(config['node']):
+            if os.access(config['node'], os.R_OK | os.W_OK):
+                print(f"✓ Camera {camera_id} ({config['name']}): {config['node']}")
+                available += 1
             else:
-                filename = None
-            
-            success, result = self.capture_image(device_id, filename, method)
-            results[device_id] = (success, result)
-        
-        return results
-    
-    def set_camera_focus(self, camera_id, focus_value):
-        """
-        Set focus for a specific camera
-        
-        Args:
-            camera_id: Camera identifier
-            focus_value: Focus value (0-127) or None for auto focus
-        """
-        device_config = self._get_device_config(camera_id)
-        if device_config:
-            set_camera_focus(device_config['node'], focus_value)
-            return True
+                print(f"⚠️  Camera {camera_id}: No permission for {config['node']}")
         else:
-            print(f"Camera {camera_id} not found")
-            return False
+            print(f"⚠️  Camera {camera_id}: {config['node']} not found")
     
-    def get_camera_info(self, camera_id):
-        """Get information about a specific camera"""
-        device_config = self._get_device_config(camera_id)
-        if device_config:
-            return {
-                'name': device_config['name'],
-                'node': device_config['node'],
-                'capture_resolution': device_config['capture_resolution'],
-                'preview_resolution': device_config['preview_resolution'],
-                'focus_value': device_config.get('focus_value'),
-                'rotate': device_config.get('rotate', False)
-            }
+    return available
+
+def set_camera_focus(camera_id: int, focus_value: int) -> bool:
+    """
+    Set camera focus manually
+    
+    Args:
+        camera_id: Camera ID (1 or 2)
+        focus_value: Focus value (0-127)
+        
+    Returns:
+        bool: True if successful
+    """
+    if camera_id not in CAMERAS:
+        print(f"❌ Invalid camera ID: {camera_id}")
+        return False
+    
+    config = CAMERAS[camera_id]
+    device_node = config['node']
+    
+    try:
+        # Set manual focus
+        subprocess.run([
+            "v4l2-ctl", "-d", device_node,
+            "--set-ctrl=focus_automatic_continuous=0",
+            f"--set-ctrl=focus_absolute={focus_value}"
+        ], check=False, capture_output=True)
+        
+        print(f"✓ Camera {camera_id} focus set to {focus_value}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to set focus for camera {camera_id}: {e}")
+        return False
+
+def capture_image(camera_id: int, filename: Optional[str] = None, method: str = 'fswebcam') -> Tuple[bool, str]:
+    """
+    Capture image from specified camera
+    
+    Args:
+        camera_id: Camera ID (1 or 2)
+        filename: Output filename (auto-generated if None)
+        method: Capture method ('fswebcam' or 'opencv')
+        
+    Returns:
+        Tuple[bool, str]: (success, filename_or_error_message)
+    """
+    if camera_id not in CAMERAS:
+        return False, f"Invalid camera ID: {camera_id}"
+    
+    config = CAMERAS[camera_id]
+    
+    # Generate filename if not provided
+    if filename is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"camera{camera_id}_{timestamp}.jpg"
+    
+    # Ensure filename has .jpg extension
+    if not filename.endswith('.jpg'):
+        filename += '.jpg'
+    
+    # Full path
+    filepath = os.path.join(current_data_folder, filename)
+    
+    print(f"📸 Capturing from camera {camera_id} ({config['name']})...")
+    
+    if method.lower() == 'fswebcam':
+        return _capture_fswebcam(camera_id, config, filepath)
+    elif method.lower() == 'opencv':
+        return _capture_opencv(camera_id, config, filepath)
+    else:
+        return False, f"Unknown capture method: {method}"
+
+def _capture_fswebcam(camera_id: int, config: dict, filepath: str) -> Tuple[bool, str]:
+    """Capture using fswebcam"""
+    device_node = config['node']
+    width, height = config['capture_resolution']
+    rotate = config['rotate']
+    
+    try:
+        # Build command
+        cmd = [
+            "fswebcam",
+            "-d", device_node,
+            "-r", f"{width}x{height}",
+            "--jpeg", "95",
+            "--no-banner",
+            "--skip", "2",
+            "-v",
+            filepath
+        ]
+        
+        if rotate:
+            cmd.extend(["--rotate", "180"])
+        
+        # Execute capture
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0 and os.path.exists(filepath):
+            file_size = os.path.getsize(filepath) / (1024*1024)  # MB
+            print(f"✓ Image saved: {filepath} ({file_size:.1f} MB)")
+            return True, filepath
+        else:
+            error_msg = result.stderr if result.stderr else "Unknown error"
+            return False, f"fswebcam failed: {error_msg}"
+            
+    except subprocess.TimeoutExpired:
+        return False, "Capture timed out"
+    except Exception as e:
+        return False, f"Capture error: {str(e)}"
+
+def _capture_opencv(camera_id: int, config: dict, filepath: str) -> Tuple[bool, str]:
+    """Capture using OpenCV"""
+    device_node = config['node']
+    width, height = config['capture_resolution']
+    rotate = config['rotate']
+    
+    # Extract device number
+    device_num = int(device_node.split('video')[-1])
+    
+    try:
+        # Open camera
+        cap = cv2.VideoCapture(device_num, cv2.CAP_V4L2)
+        
+        if not cap.isOpened():
+            return False, f"Failed to open {device_node}"
+        
+        # Set resolution
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        
+        # Allow camera to adjust
+        time.sleep(1)
+        
+        # Capture frame
+        ret, frame = cap.read()
+        cap.release()
+        
+        if ret and frame is not None:
+            # Apply rotation if needed
+            if rotate:
+                frame = cv2.flip(frame, -1)  # 180 degree rotation
+            
+            # Save image
+            success = cv2.imwrite(filepath, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            
+            if success:
+                file_size = os.path.getsize(filepath) / (1024*1024)  # MB
+                print(f"✓ Image saved: {filepath} ({file_size:.1f} MB)")
+                return True, filepath
+            else:
+                return False, "Failed to save image"
+        else:
+            return False, "Failed to capture frame"
+            
+    except Exception as e:
+        return False, f"OpenCV error: {str(e)}"
+
+def capture_all_cameras(filename_prefix: str = "capture", method: str = 'fswebcam') -> Dict[int, Tuple[bool, str]]:
+    """
+    Capture from all available cameras
+    
+    Args:
+        filename_prefix: Prefix for filenames
+        method: Capture method
+        
+    Returns:
+        Dict[int, Tuple[bool, str]]: Results for each camera
+    """
+    results = {}
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    for camera_id in CAMERAS.keys():
+        if os.path.exists(CAMERAS[camera_id]['node']):
+            filename = f"{filename_prefix}_camera{camera_id}_{timestamp}.jpg"
+            success, result = capture_image(camera_id, filename, method)
+            results[camera_id] = (success, result)
+        else:
+            results[camera_id] = (False, f"Camera {camera_id} not available")
+    
+    return results
+
+def list_cameras() -> List[Dict]:
+    """List available cameras"""
+    cameras = []
+    
+    for camera_id, config in CAMERAS.items():
+        available = os.path.exists(config['node']) and os.access(config['node'], os.R_OK | os.W_OK)
+        
+        cameras.append({
+            'id': camera_id,
+            'name': config['name'],
+            'node': config['node'],
+            'available': available,
+            'capture_resolution': config['capture_resolution'],
+            'preview_resolution': config['preview_resolution']
+        })
+    
+    return cameras
+
+def get_camera_info(camera_id: int) -> Optional[Dict]:
+    """Get information about a specific camera"""
+    if camera_id not in CAMERAS:
         return None
     
-    def list_cameras(self):
-        """List all available cameras"""
-        cameras = []
-        for device_id, config in VIDEO_DEVICES.items():
-            cameras.append({
-                'id': device_id,
-                'name': config['name'],
-                'node': config['node'],
-                'capture_resolution': config['capture_resolution']
-            })
-        return cameras
+    config = CAMERAS[camera_id]
+    available = os.path.exists(config['node']) and os.access(config['node'], os.R_OK | os.W_OK)
     
-    def _get_device_config(self, camera_id):
-        """Get device configuration for camera_id"""
-        # Handle numeric camera IDs (1, 2, etc.)
-        if isinstance(camera_id, int):
-            # Map to video devices (assuming camera 1 = video0, camera 2 = video2, etc.)
-            if camera_id == 1:
-                return VIDEO_DEVICES.get('video0')
-            elif camera_id == 2:
-                return VIDEO_DEVICES.get('video2')
-            else:
-                return None
-        
-        # Handle string camera IDs (video0, video2, etc.)
-        return VIDEO_DEVICES.get(camera_id)
+    return {
+        'id': camera_id,
+        'name': config['name'],
+        'node': config['node'],
+        'available': available,
+        'capture_resolution': config['capture_resolution'],
+        'preview_resolution': config['preview_resolution'],
+        'focus_value': config['focus_value'],
+        'rotate': config['rotate']
+    }
 
-# Global instance for easy access
-camera_integration = CameraIntegration()
+def check_dependencies() -> bool:
+    """Check if required tools are available"""
+    dependencies_ok = True
+    
+    # Check fswebcam
+    try:
+        subprocess.run(["fswebcam", "--version"], capture_output=True, check=True)
+        print("✓ fswebcam available")
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("⚠️  fswebcam not found. Install with: sudo apt install fswebcam")
+        dependencies_ok = False
+    
+    # Check v4l2-ctl
+    try:
+        subprocess.run(["v4l2-ctl", "--version"], capture_output=True, check=True)
+        print("✓ v4l2-ctl available")
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("⚠️  v4l2-ctl not found. Install with: sudo apt install v4l-utils")
+        dependencies_ok = False
+    
+    # Check OpenCV
+    try:
+        cv2_version = cv2.__version__
+        print(f"✓ OpenCV available (version {cv2_version})")
+    except:
+        print("⚠️  OpenCV not available")
+        dependencies_ok = False
+    
+    return dependencies_ok
 
-# Convenience functions for main.py
-def initialize_camera_system(data_folder=None):
-    """Initialize the camera integration system"""
-    global camera_integration
-    if data_folder:
-        camera_integration.set_data_folder(data_folder)
-    return camera_integration.initialize()
+def set_gui_instance(gui):
+    """Set GUI instance for preview management (optional)"""
+    global gui_instance
+    gui_instance = gui
 
-def capture_image(camera_id, filename=None, method='fswebcam'):
-    """Capture image from specified camera"""
-    return camera_integration.capture_image(camera_id, filename, method)
+def get_data_folder() -> str:
+    """Get current data folder"""
+    return current_data_folder
 
-def capture_all_cameras(filename_prefix=None, method='fswebcam'):
-    """Capture from all cameras"""
-    return camera_integration.capture_all_cameras(filename_prefix, method)
+def set_data_folder(folder: str):
+    """Set data folder for captures"""
+    global current_data_folder
+    current_data_folder = folder
+    if not os.path.exists(current_data_folder):
+        os.makedirs(current_data_folder)
+        print(f"Created data folder: {current_data_folder}")
 
-def set_camera_focus(camera_id, focus_value):
-    """Set camera focus"""
-    return camera_integration.set_camera_focus(camera_id, focus_value)
-
-def get_camera_info(camera_id):
-    """Get camera information"""
-    return camera_integration.get_camera_info(camera_id)
-
-def list_cameras():
-    """List all available cameras"""
-    return camera_integration.list_cameras() 
+# Initialize on import
+if __name__ == "__main__":
+    print("Camera Integration System")
+    print("=" * 30)
+    
+    # Check dependencies
+    deps_ok = check_dependencies()
+    
+    # Check camera availability
+    available = check_camera_availability()
+    
+    print(f"\nSystem Status:")
+    print(f"  Dependencies: {'✓ OK' if deps_ok else '❌ Missing'}")
+    print(f"  Cameras: {available} available")
+    
+    if available > 0:
+        print("\nAvailable cameras:")
+        for camera in list_cameras():
+            status = "✓ Available" if camera['available'] else "❌ Not available"
+            print(f"  Camera {camera['id']}: {camera['name']} - {status}") 

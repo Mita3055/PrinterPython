@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Comprehensive Printer GUI with Camera Control and Toolpath Execution
-Combines printer control, camera preview, timelapse, and toolpath execution
+Camera GUI with Timelapse Functionality
+Camera preview and control system with timelapse capabilities
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
 import threading
 import time
@@ -24,26 +24,17 @@ from camera_integration import (
     set_gui_instance
 )
 
-# Import the Klipper controller and other modules
-from klipper_controller import KlipperController
-from g_code_comands import *
-from configs import *
-from data_collection import DataCollector
-
-# Import generate_toolpath from main
-from main import generate_toolpath
-
 # Focus range constants
 FOCUS_MIN, FOCUS_MAX = 0, 127
 
 # Global variable for print sequence control
 print_sequence_started = False
 
-class PrinterGUI:
+class CameraGUI:
     def __init__(self, root):
         self.root = root
-        root.title("Comprehensive Printer Control with Camera System")
-        root.geometry("1600x1000")
+        root.title("Camera Control with Timelapse")
+        root.geometry("1400x900")
         
         # Camera system
         self.streams = {}
@@ -54,21 +45,10 @@ class PrinterGUI:
         self.status_labels = {}
         self.camera_frames = {}
         
-        # Printer state
-        self.printer_connected = False
-        self.printing_active = False
-        self.printer_controller = None
-        self.data_folder = None
-        
         # Timelapse state
         self.timelapse_active = False
         self.timelapse_thread = None
-        
-        # Print sequence state
-        self.toolpath = []
-        self.printer_profile = None
-        self.capacitor_profile = None
-        self.data_collector = None
+        self.data_folder = None
         
         # Initialize camera system
         self._initialize_cameras()
@@ -125,7 +105,7 @@ class PrinterGUI:
         title_frame = ttk.Frame(main_frame)
         title_frame.pack(fill=tk.X, pady=(0, 10))
         
-        ttk.Label(title_frame, text="Comprehensive Printer Control with Camera System", 
+        ttk.Label(title_frame, text="Camera Control with Timelapse", 
                 font=('Arial', 16, 'bold')).pack()
         
         # Create notebook for tabs
@@ -135,14 +115,8 @@ class PrinterGUI:
         # Camera preview tab
         self._create_camera_tab()
         
-        # Printer control tab
-        self._create_printer_tab()
-        
         # Timelapse tab
         self._create_timelapse_tab()
-        
-        # Toolpath tab
-        self._create_toolpath_tab()
         
         # Settings tab
         self._create_settings_tab()
@@ -271,54 +245,6 @@ class PrinterGUI:
         self.global_status = ttk.Label(control_frame, text="Ready", foreground="green")
         self.global_status.pack(pady=5)
 
-    def _create_printer_tab(self):
-        """Create the printer control tab"""
-        printer_frame = ttk.Frame(self.notebook)
-        self.notebook.add(printer_frame, text="🖨️ Printer Control")
-        
-        # Printer status
-        status_frame = ttk.LabelFrame(printer_frame, text="Printer Status")
-        status_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        self.printer_status_label = ttk.Label(status_frame, text="Not Connected", foreground="red")
-        self.printer_status_label.pack(pady=5)
-        
-        # Connection controls
-        conn_frame = ttk.LabelFrame(printer_frame, text="Connection")
-        conn_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        ttk.Button(conn_frame, text="Connect to Printer", command=self.connect_printer).pack(pady=5)
-        ttk.Button(conn_frame, text="Disconnect", command=self.disconnect_printer).pack(pady=5)
-        
-        # Manual printer controls
-        manual_frame = ttk.LabelFrame(printer_frame, text="Manual Control")
-        manual_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        # Home buttons
-        home_frame = ttk.Frame(manual_frame)
-        home_frame.pack(fill=tk.X, pady=5)
-        
-        ttk.Button(home_frame, text="Home All", command=lambda: self.home_axes("XYZ")).pack(side=tk.LEFT, padx=5)
-        ttk.Button(home_frame, text="Home XY", command=lambda: self.home_axes("XY")).pack(side=tk.LEFT, padx=5)
-        ttk.Button(home_frame, text="Home Z", command=lambda: self.home_axes("Z")).pack(side=tk.LEFT, padx=5)
-        
-        # Position display
-        pos_frame = ttk.Frame(manual_frame)
-        pos_frame.pack(fill=tk.X, pady=5)
-        
-        self.position_label = ttk.Label(pos_frame, text="Position: X:0.000 Y:0.000 Z:0.000 E:0.000")
-        self.position_label.pack(side=tk.LEFT)
-        
-        ttk.Button(pos_frame, text="Update Position", command=self.update_position_display).pack(side=tk.RIGHT, padx=5)
-        
-        # Emergency stop
-        emergency_frame = ttk.Frame(printer_frame)
-        emergency_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        ttk.Button(emergency_frame, text="🚨 EMERGENCY STOP", 
-                  command=self.emergency_stop, 
-                  style="Emergency.TButton").pack(pady=5)
-
     def _create_timelapse_tab(self):
         """Create the timelapse control tab"""
         timelapse_frame = ttk.Frame(self.notebook)
@@ -389,42 +315,6 @@ class PrinterGUI:
         # Status label
         self.timelapse_status = ttk.Label(control_frame, text="Ready to start timelapse", foreground="green")
         self.timelapse_status.pack(pady=5)
-
-    def _create_toolpath_tab(self):
-        """Create the toolpath configuration tab"""
-        toolpath_frame = ttk.Frame(self.notebook)
-        self.notebook.add(toolpath_frame, text="🛤️ Toolpath Configuration")
-        
-        # Profile selection
-        profile_frame = ttk.LabelFrame(toolpath_frame, text="Printer Profile")
-        profile_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        ttk.Label(profile_frame, text="Printer Profile:").pack(anchor='w', padx=10, pady=5)
-        self.printer_profile_var = tk.StringVar(value="MXeneProfile_pet_25G")
-        profile_combo = ttk.Combobox(profile_frame, textvariable=self.printer_profile_var,
-                                   values=["MXeneProfile_pet_25G", "MXeneProfile_pet_30G", "MXeneProfile2_20"],
-                                   state="readonly")
-        profile_combo.pack(anchor='w', padx=10, pady=5)
-        
-        ttk.Label(profile_frame, text="Capacitor Profile:").pack(anchor='w', padx=10, pady=5)
-        self.capacitor_profile_var = tk.StringVar(value="stdCap")
-        cap_combo = ttk.Combobox(profile_frame, textvariable=self.capacitor_profile_var,
-                               values=["stdCap", "LargeCap", "smallCap"],
-                               state="readonly")
-        cap_combo.pack(anchor='w', padx=10, pady=5)
-        
-        # Toolpath generation
-        gen_frame = ttk.LabelFrame(toolpath_frame, text="Toolpath Generation")
-        gen_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        ttk.Button(gen_frame, text="Generate Toolpath", command=self.generate_toolpath).pack(pady=5)
-        
-        # Toolpath info
-        info_frame = ttk.LabelFrame(toolpath_frame, text="Toolpath Information")
-        info_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        self.toolpath_info = ttk.Label(info_frame, text="No toolpath generated")
-        self.toolpath_info.pack(pady=5)
 
     def _create_settings_tab(self):
         """Create the settings tab"""
@@ -556,69 +446,6 @@ class PrinterGUI:
         ))
         self.root.after(0, lambda: self.capture_all_btn.config(state="normal"))
 
-    def connect_printer(self):
-        """Connect to the printer"""
-        try:
-            self.printer_controller = KlipperController()
-            if self.printer_controller.connect():
-                self.printer_connected = True
-                self.printer_status_label.config(text="Connected", foreground="green")
-                messagebox.showinfo("Printer", "Printer connected successfully!")
-                self.update_position_display()
-            else:
-                messagebox.showerror("Error", "Failed to connect to printer")
-        except Exception as e:
-            messagebox.showerror("Error", f"Connection error: {e}")
-
-    def disconnect_printer(self):
-        """Disconnect from the printer"""
-        self.printer_connected = False
-        self.printer_controller = None
-        self.printer_status_label.config(text="Not Connected", foreground="red")
-        messagebox.showinfo("Printer", "Printer disconnected")
-
-    def home_axes(self, axes):
-        """Home specified axes"""
-        if not self.printer_connected:
-            messagebox.showerror("Error", "Please connect to printer first")
-            return
-        
-        def do_home():
-            try:
-                if self.printer_controller:
-                    success = self.printer_controller.home_axes(axes)
-                    if success:
-                        self.root.after(0, lambda: messagebox.showinfo("Success", f"Axes {axes} homed successfully"))
-                        self.update_position_display()
-                    else:
-                        self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to home axes {axes}"))
-                else:
-                    self.root.after(0, lambda: messagebox.showerror("Error", "Printer controller not available"))
-            except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Error", f"Homing error: {e}"))
-        
-        threading.Thread(target=do_home, daemon=True).start()
-
-    def update_position_display(self):
-        """Update the position display"""
-        if self.printer_connected and self.printer_controller:
-            try:
-                position = self.printer_controller.get_position()
-                if position:
-                    x, y, z, e = position
-                    self.position_label.config(text=f"Position: X:{x:.3f} Y:{y:.3f} Z:{z:.3f} E:{e:.3f}")
-            except Exception as e:
-                print(f"Error updating position: {e}")
-
-    def emergency_stop(self):
-        """Emergency stop the printer"""
-        if self.printer_connected and self.printer_controller:
-            try:
-                self.printer_controller.emergency_stop()
-                messagebox.showwarning("Emergency Stop", "Emergency stop activated!")
-            except Exception as e:
-                messagebox.showerror("Error", f"Emergency stop error: {e}")
-
     def toggle_timelapse(self):
         """Toggle timelapse on/off"""
         if self.timelapse_active:
@@ -705,195 +532,17 @@ class PrinterGUI:
             self.root.after(0, lambda: self.timelapse_btn.config(text="▶️ Start Timelapse"))
             self.timelapse_active = False
 
-    def generate_toolpath(self):
-        """Generate toolpath based on selected profiles"""
-        try:
-            # Get selected profiles
-            printer_profile_name = self.printer_profile_var.get()
-            capacitor_profile_name = self.capacitor_profile_var.get()
-            
-            # Map profile names to actual objects
-            profile_map = {
-                "MXeneProfile_pet_25G": MXeneProfile_pet_25G,
-                "MXeneProfile_pet_30G": MXeneProfile_pet_30G,
-                "MXeneProfile2_20": MXeneProfile2_20
-            }
-            
-            cap_map = {
-                "stdCap": stdCap,
-                "LargeCap": LargeCap,
-                "smallCap": smallCap
-            }
-            
-            self.printer_profile = profile_map.get(printer_profile_name)
-            self.capacitor_profile = cap_map.get(capacitor_profile_name)
-            
-            if not self.printer_profile or not self.capacitor_profile:
-                messagebox.showerror("Error", "Invalid profile selection")
-                return
-            
-            # Generate toolpath
-            self.toolpath = generate_toolpath(prnt=self.printer_profile, cap=self.capacitor_profile)
-            
-            # Update toolpath info
-            info_text = f"Toolpath generated: {len(self.toolpath)} commands\n"
-            info_text += f"Printer Profile: {printer_profile_name}\n"
-            info_text += f"Capacitor Profile: {capacitor_profile_name}\n"
-            info_text += f"Extrusion Rate: {self.printer_profile.extrusion}\n"
-            info_text += f"Feed Rate: {self.printer_profile.feed_rate}"
-            
-            self.toolpath_info.config(text=info_text)
-            messagebox.showinfo("Success", f"Toolpath generated with {len(self.toolpath)} commands")
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Toolpath generation failed: {e}")
-
     def begin_print_sequence(self):
-        """Begin the print sequence"""
-        if not self.printer_connected:
-            messagebox.showerror("Error", "Please connect to printer first")
-            return
-        
-        if not self.toolpath:
-            messagebox.showerror("Error", "Please generate a toolpath first")
-            return
-        
+        """Begin the print sequence - this will be called from main.py"""
         self.print_sequence_status.config(text="Print sequence initiated!", foreground="green")
-        
         # Set global variable to signal main.py to start the print sequence
         global print_sequence_started
         print_sequence_started = True
         print("Print sequence button clicked - starting print sequence...")
-        
-        # Start print sequence in background
-        threading.Thread(target=self._execute_print_sequence, daemon=True).start()
-
-    def _execute_print_sequence(self):
-        """Execute the print sequence in background"""
-        try:
-            # Create data folder
-            self.data_folder = self._create_data_directory()
-            
-            # Save toolpath
-            self._save_toolpath()
-            
-            # Initialize data collector
-            self.data_collector = DataCollector()
-            
-            # Execute toolpath
-            self._execute_toolpath()
-            
-            # Capture final images
-            self._capture_final_images()
-            
-            self.root.after(0, lambda: messagebox.showinfo("Success", "Print sequence completed successfully!"))
-            
-        except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Error", f"Print sequence failed: {e}"))
-
-    def _create_data_directory(self):
-        """Create a timestamped directory within the data folder"""
-        data_folder = "data"
-        if not os.path.exists(data_folder):
-            os.makedirs(data_folder)
-        
-        timestamp = datetime.now().strftime("%m_%d_%H_%M_%S")
-        new_dir_path = os.path.join(data_folder, timestamp)
-        os.makedirs(new_dir_path, exist_ok=True)
-        
-        print(f"Created timestamped directory: {new_dir_path}")
-        return timestamp
-
-    def _save_toolpath(self):
-        """Save the toolpath as a G-code file"""
-        timestamp = datetime.now().strftime("%m_%d_%H_%M_%S")
-        filename = f"toolpath_{timestamp}.gcode"
-        if self.data_folder:
-            filepath = os.path.join("data", self.data_folder, filename)
-        else:
-            filepath = os.path.join("data", filename)
-        
-        try:
-            with open(filepath, 'w') as f:
-                f.write("; Toolpath generated by MXene printer\n")
-                f.write(f"; Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("; Format: G1 X<x> Y<y> Z<z> E<extrusion>\n\n")
-                
-                for i, point in enumerate(self.toolpath):
-                    x, y, z, e = point
-                    f.write(f"G1 X{x:.3f} Y{y:.3f} Z{z:.3f} E{e:.3f}\n")
-                
-                f.write("\n; End of toolpath\n")
-            
-            print(f"✓ Toolpath saved as G-code: {filepath}")
-            
-        except Exception as e:
-            print(f"✗ Error saving toolpath: {e}")
-
-    def _execute_toolpath(self):
-        """Execute the toolpath commands"""
-        if not self.printer_controller:
-            print("Error: Printer controller not available")
-            return
-            
-        for command in self.toolpath:
-            if "CAPTURE" in command:
-                self._handle_capture_command(command)
-            elif ";" not in command:
-                self.printer_controller.send_gcode(command)
-                time.sleep(0.01)
-
-    def _handle_capture_command(self, command):
-        """Handle CAPTURE commands in toolpath"""
-        try:
-            # Parse CAPTURE command: "CAPTURE, camera, x, y, z"
-            parts = [part.strip() for part in command.split(",")]
-            if len(parts) != 5:
-                print(f"✗ Invalid CAPTURE format: {command}")
-                return
-                
-            camera = int(parts[1])
-            x = float(parts[2])
-            y = float(parts[3])
-            z = float(parts[4])
-
-            print(f"Capturing image from camera {camera} at {x}, {y}, {z}")
-            
-            # Move printer to position
-            if self.printer_controller:
-                self.printer_controller.send_gcode(absolute()[0])
-                self.printer_controller.send_gcode(movePrintHead(0, 0, z, self.printer_profile)[0])
-                self.printer_controller.send_gcode(movePrintHead(x, y, 0, self.printer_profile)[0])
-            
-            # Capture image
-            timestamp = datetime.now().strftime("%H_%M_%S")
-            filename = f"camera{camera}_pos_{x}_{y}_{z}_{timestamp}.jpg"
-            
-            success, result = capture_image(camera_id=camera, filename=filename, method='fswebcam')
-            
-            if success:
-                print(f"✓ Capture completed: {result}")
-            else:
-                print(f"✗ Capture failed")
-            
-            time.sleep(1)
-            
-        except (ValueError, IndexError) as e:
-            print(f"✗ Error parsing CAPTURE command '{command}': {e}")
-
-    def _capture_final_images(self):
-        """Capture final images from all cameras"""
-        print("Capturing final images from all cameras...")
-        final_captures = capture_all_cameras(filename_prefix="final", method='fswebcam')
-        
-        for camera_id, (success, result) in final_captures.items():
-            if success:
-                print(f"✓ Final capture {camera_id}: {result}")
-            else:
-                print(f"✗ Final capture {camera_id} failed: {result}")
 
     def browse_folder(self):
         """Browse for data folder"""
+        from tkinter import filedialog
         folder = filedialog.askdirectory(title="Select Data Folder")
         if folder:
             self.folder_var.set(folder)
@@ -932,7 +581,7 @@ class PrinterGUI:
 def main():
     """Main function to start the GUI"""
     root = tk.Tk()
-    app = PrinterGUI(root)
+    app = CameraGUI(root)
     root.mainloop()
 
 if __name__ == "__main__":

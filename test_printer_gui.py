@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 def test_printer_gui():
     """Test the printer GUI"""
     try:
-        from printer_gui import main
+        from Camera_gui import main
         print("Starting Printer GUI with Multi-Camera Preview...")
         print("Features:")
         print("  - Live camera previews in one window")
