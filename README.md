@@ -2,6 +2,41 @@
 
 A Python-based 3D printer control system with pressure feedback, camera monitoring, and automated toolpath generation.
 
+## Quick Setup for Raspberry Pi
+
+### Switch to Raspberry Pi Branch and Sync with Main
+
+Copy and paste these commands to switch to the Raspberry Pi branch and make it identical to main:
+
+```bash
+# Switch to Raspberry Pi branch
+git checkout Raspberri-Pi
+
+# Fetch latest changes from remote
+git fetch origin
+
+# Reset Raspberry Pi branch to match main branch exactly
+git reset --hard origin/main
+
+# Push the updated Raspberry Pi branch to remote
+git push origin Raspberri-Pi --force
+```
+
+### Alternative: Create Fresh Raspberry Pi Branch
+
+If you want to create a new Raspberry Pi branch from main:
+
+```bash
+# Switch to main branch
+git checkout main
+
+# Create and switch to new Raspberry Pi branch
+git checkout -b Raspberri-Pi
+
+# Push the new branch to remote
+git push origin Raspberri-Pi
+```
+
 ## Core Modules
 
 ### Main Control (`main.py`)
