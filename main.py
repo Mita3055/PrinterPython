@@ -10,7 +10,7 @@ import csv
 import os
 from datetime import datetime
 from klipper_controller import KlipperController
-from utills.loadcell import getLoad, initialize_loadcell
+#from utills.loadcell import getLoad, initialize_loadcell
 from camera_integration import *
 from utills.g_code_comands import *
 from data_collection import DataCollector
@@ -141,10 +141,11 @@ def save_toolpath(toolpath, data_folder):
 def main():
 
     # Initialize controller (localhost since running on Pi)
-    printer = KlipperController(host="localhost", port=7125)
+    printer = KlipperController()
+    printer.connect()
     
     # Initialize loadcell
-    initialize_loadcell()
+    #initialize_loadcell()
     
     
     # Create data folder and initialize camera system
@@ -202,7 +203,7 @@ def main():
     save_toolpath(toolpath, data_folder)
 
     data_collector = DataCollector()
-    data_collector.record_print_data(printer, getLoad)
+    #data_collector.record_print_data(printer, getLoad)
 
 
 
@@ -246,7 +247,7 @@ def main():
             printer.send_gcode(comand)
             time.sleep(0.01)
 
-    data_collector.stop_record_data()
+    #data_collector.stop_record_data()
     
     # Optional: Capture final images from all cameras
     print("Capturing final images from all cameras...")

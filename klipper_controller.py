@@ -1,102 +1,246 @@
 #!/usr/bin/env python3
 """
-Simplified Klipper/Moonraker Printer Controller for Raspberry Pi
-Focus: Homing, Linear Movement, and Continuous Position Monitoring
+Simplified and Robust Klipper/Moonraker Controller
+Enhanced connection diagnostics and error handling
 """
 
 import requests
 import json
 import time
 import sys
-import argparse
 import threading
-from typing import Optional, Tuple
-import signal
+from typing import Optional, Tuple, Dict, Any
+import urllib3
 
-class PrinterError(Exception):
-    """Custom exception for printer-related errors"""
+# Disable SSL warnings for local connections
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+class PrinterConnectionError(Exception):
+    """Exception raised when printer connection fails"""
     pass
 
 class KlipperController:
-    """Simplified controller class for Klipper/Moonraker interface"""
+    """Simplified and robust Klipper controller with enhanced diagnostics"""
     
     def __init__(self, host="localhost", port=7125, timeout=10):
-        """
-        Initialize the Klipper controller
-        
-        Args:
-            host (str): Moonraker host (localhost for local Pi)
-            port (int): Moonraker port
-            timeout (int): Request timeout in seconds
-        """
         self.host = host
         self.port = port
         self.timeout = timeout
         self.base_url = f"http://{host}:{port}"
         self.connected = False
-        self.printer_info = {}
-        self.monitoring = False
-        self.monitor_thread = None
+        self.printer_state = "unknown"
+        self.session = requests.Session()
+        self.session.headers.update({'User-Agent': 'Intergrated DIW Controller/1.8'})
         
-    def connect(self) -> bool:
+        print(f"Initialized controller for {self.base_url}")
+    
+    def test_connection(self) -> Dict[str, Any]:
         """
-        Establish connection to the printer
+        Test connection to Moonraker with detailed diagnostics
         
         Returns:
-            bool: True if successful, False otherwise
+            dict: Connection test results
         """
+        results = {
+            'moonraker_reachable': False,
+            'printer_info_available': False,
+            'printer_state': 'unknown',
+            'klipper_connected': False,
+            'error_message': None
+        }
+        
         try:
-            response = requests.get(f"{self.base_url}/printer/info", timeout=self.timeout)
-            response.raise_for_status()
+            print("Testing Moonraker connection...")
             
-            self.printer_info = response.json().get('result', {})
+            # Test 1: Basic connectivity to Moonraker
+            response = self.session.get(f"{self.base_url}/server/info", timeout=5)
+            if response.status_code == 200:
+                results['moonraker_reachable'] = True
+                server_info = response.json().get('result', {})
+                print(f"✓ Moonraker reachable - Version: {server_info.get('moonraker_version', 'unknown')}")
+            else:
+                results['error_message'] = f"Moonraker returned status {response.status_code}"
+                return results
+                
+        except requests.exceptions.ConnectionError:
+            results['error_message'] = f"Cannot connect to {self.base_url} - Is Moonraker running?"
+            return results
+        except requests.exceptions.Timeout:
+            results['error_message'] = "Connection timeout - Moonraker may be slow to respond"
+            return results
+        except Exception as e:
+            results['error_message'] = f"Unexpected error: {str(e)}"
+            return results
+        
+        try:
+            # Test 2: Get printer info
+            print("Testing printer info endpoint...")
+            response = self.session.get(f"{self.base_url}/printer/info", timeout=self.timeout)
+            
+            if response.status_code == 200:
+                results['printer_info_available'] = True
+                printer_info = response.json().get('result', {})
+                results['printer_state'] = printer_info.get('state', 'unknown')
+                
+                if results['printer_state'] == 'ready':
+                    results['klipper_connected'] = True
+                    print(f"✓ Printer info available - State: {results['printer_state']}")
+                else:
+                    print(f"⚠ Printer state: {results['printer_state']}")
+                    
+            else:
+                results['error_message'] = f"Printer info endpoint returned {response.status_code}"
+                
+        except Exception as e:
+            results['error_message'] = f"Error getting printer info: {str(e)}"
+            
+        return results
+    
+    def connect(self) -> bool:
+        """
+        Connect to printer with comprehensive diagnostics
+        
+        Returns:
+            bool: True if successful connection
+        """
+        print("=" * 50)
+        print("CONNECTING TO PRINTER")
+        print("=" * 50)
+        
+        # Run connection test
+        test_results = self.test_connection()
+        
+        # Print detailed results
+        print("\nConnection Test Results:")
+        print(f"  Moonraker reachable: {'✓' if test_results['moonraker_reachable'] else '✗'}")
+        print(f"  Printer info available: {'✓' if test_results['printer_info_available'] else '✗'}")
+        print(f"  Printer state: {test_results['printer_state']}")
+        print(f"  Klipper connected: {'✓' if test_results['klipper_connected'] else '✗'}")
+        
+        if test_results['error_message']:
+            print(f"  Error: {test_results['error_message']}")
+        
+        # Determine if we can proceed
+        if not test_results['moonraker_reachable']:
+            print("\n❌ FAILED: Cannot reach Moonraker")
+            self._print_troubleshooting_tips()
+            return False
+        
+        if not test_results['printer_info_available']:
+            print("\n❌ FAILED: Cannot get printer information")
+            self._print_klipper_troubleshooting()
+            return False
+        
+        # Check printer state
+        state = test_results['printer_state']
+        if state == 'ready':
+            print("\n✅ SUCCESS: Printer is ready!")
             self.connected = True
+            self.printer_state = state
             
-            print(f"✓ Connected to {self.printer_info.get('hostname', 'Unknown')}")
-            print(f"  Klipper version: {self.printer_info.get('software_version', 'Unknown')}")
-            print(f"  State: {self.printer_info.get('state', 'Unknown')}")
+            # Get additional info
+            self._get_printer_details()
             
-            # Turn off heaters immediately upon connection
-            self.turn_off_heaters()
+            # Safety: Turn off heaters
+            self._safety_shutdown_heaters()
             
             return True
             
-        except requests.exceptions.RequestException as e:
-            print(f"✗ Connection failed: {e}")
-            self.connected = False
+        elif state == 'error':
+            print("\n⚠ WARNING: Printer is in error state")
+            print("You may need to resolve printer errors before proceeding.")
+            
+            # Still mark as connected for basic operations
+            self.connected = True
+            self.printer_state = state
+            return True
+            
+        elif state == 'shutdown':
+            print("\n❌ FAILED: Klipper is shutdown")
+            print("Try running 'FIRMWARE_RESTART' or restart Klipper service")
             return False
+            
+        else:
+            print(f"\n⚠ WARNING: Printer state '{state}' - proceeding with caution")
+            self.connected = True
+            self.printer_state = state
+            return True
     
-    def turn_off_heaters(self):
-        """Turn off all heaters (safety measure)"""
+    def _get_printer_details(self):
+        """Get and display printer details"""
         try:
-            self.send_gcode("M104 S0", silent=True)  # Turn off hotend
-            self.send_gcode("M140 S0", silent=True)  # Turn off bed
+            response = self.session.get(f"{self.base_url}/printer/info", timeout=self.timeout)
+            if response.status_code == 200:
+                info = response.json().get('result', {})
+                print(f"\nPrinter Details:")
+                print(f"  Hostname: {info.get('hostname', 'unknown')}")
+                print(f"  Software: {info.get('software_version', 'unknown')}")
+                print(f"  MCU: {info.get('mcu_version', 'unknown')}")
+                
+        except Exception as e:
+            print(f"Could not get printer details: {e}")
+    
+    def _safety_shutdown_heaters(self):
+        """Turn off heaters for safety"""
+        try:
+            print("\nSafety: Turning off heaters...")
+            self.send_gcode("M104 S0", silent=True)  # Hotend off
+            self.send_gcode("M140 S0", silent=True)  # Bed off
             print("✓ Heaters set to 0°C")
         except:
-            pass  # Ignore errors for safety commands
+            print("⚠ Could not turn off heaters")
+    
+    def _print_troubleshooting_tips(self):
+        """Print troubleshooting information"""
+        print("\nTroubleshooting Tips:")
+        print("1. Check if Moonraker is running:")
+        print("   sudo systemctl status moonraker")
+        print("   sudo systemctl start moonraker")
+        print()
+        print("2. Check if port 7125 is open:")
+        print("   ss -tulpn | grep :7125")
+        print()
+        print("3. Test manually with curl:")
+        print(f"   curl {self.base_url}/server/info")
+        print()
+        print("4. Check Moonraker logs:")
+        print("   sudo journalctl -u moonraker -f")
+    
+    def _print_klipper_troubleshooting(self):
+        """Print Klipper-specific troubleshooting"""
+        print("\nKlipper Troubleshooting:")
+        print("1. Check if Klipper is running:")
+        print("   sudo systemctl status klipper")
+        print("   sudo systemctl start klipper")
+        print()
+        print("2. Check Klipper logs:")
+        print("   sudo journalctl -u klipper -f")
+        print()
+        print("3. Try firmware restart:")
+        print("   Send 'FIRMWARE_RESTART' command via web interface")
     
     def send_gcode(self, command: str, wait_complete: bool = False, silent: bool = False) -> bool:
         """
         Send G-code command to printer
         
         Args:
-            command (str): G-code command
-            wait_complete (bool): Wait for command completion
-            silent (bool): Don't print command output
+            command: G-code command string
+            wait_complete: Wait for command completion
+            silent: Don't print command output
             
         Returns:
             bool: True if successful
         """
         if not self.connected:
             if not silent:
-                print("Error: Not connected to printer")
+                print("❌ Error: Not connected to printer")
             return False
-            
+        
         try:
             url = f"{self.base_url}/printer/gcode/script"
             data = {"script": command}
             
-            response = requests.post(url, json=data, timeout=self.timeout)
+            response = self.session.post(url, json=data, timeout=self.timeout)
             response.raise_for_status()
             
             if not silent:
@@ -104,12 +248,12 @@ class KlipperController:
             
             if wait_complete:
                 self.wait_for_idle()
-                
+            
             return True
             
         except requests.exceptions.RequestException as e:
             if not silent:
-                print(f"✗ Failed to send '{command}': {e}")
+                print(f"❌ Failed to send '{command}': {e}")
             return False
     
     def get_position(self) -> Optional[Tuple[float, float, float, float]]:
@@ -117,59 +261,81 @@ class KlipperController:
         Get current toolhead position
         
         Returns:
-            Tuple: (X, Y, Z, E) positions or None if failed
+            Tuple of (X, Y, Z, E) or None if failed
         """
         if not self.connected:
             return None
-            
+        
         try:
             url = f"{self.base_url}/printer/objects/query"
-            params = {"toolhead": "position,homed_axes"}
+            params = {"toolhead": "position"}
             
-            response = requests.get(url, params=params, timeout=self.timeout)
+            response = self.session.get(url, params=params, timeout=self.timeout)
             response.raise_for_status()
             
             result = response.json().get('result', {}).get('status', {})
-            toolhead = result.get('toolhead', {})
+            position = result.get('toolhead', {}).get('position', [])
             
-            if 'position' in toolhead:
-                pos = toolhead['position'][:4]  # X, Y, Z, E
-                return tuple(pos)
+            if len(position) >= 4:
+                return tuple(position[:4])
                 
-        except requests.exceptions.RequestException:
-            pass
-            
+        except Exception as e:
+            print(f"Error getting position: {e}")
+        
         return None
     
     def get_homed_axes(self) -> str:
         """
-        Get which axes are currently homed
+        Get which axes are homed
         
         Returns:
-            str: String containing homed axes (e.g., "xyz")
+            String of homed axes (e.g., "xyz")
         """
         if not self.connected:
             return ""
-            
+        
         try:
             url = f"{self.base_url}/printer/objects/query"
             params = {"toolhead": "homed_axes"}
             
-            response = requests.get(url, params=params, timeout=self.timeout)
+            response = self.session.get(url, params=params, timeout=self.timeout)
             response.raise_for_status()
             
             result = response.json().get('result', {}).get('status', {})
             return result.get('toolhead', {}).get('homed_axes', "")
             
-        except requests.exceptions.RequestException:
+        except Exception:
             return ""
+    
+    def get_printer_state(self) -> str:
+        """
+        Get current printer state
+        
+        Returns:
+            String representing printer state
+        """
+        if not self.connected:
+            return "disconnected"
+        
+        try:
+            url = f"{self.base_url}/printer/objects/query"
+            params = {"print_stats": "state"}
+            
+            response = self.session.get(url, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            
+            result = response.json().get('result', {}).get('status', {})
+            return result.get('print_stats', {}).get('state', 'unknown')
+            
+        except Exception:
+            return "unknown"
     
     def wait_for_idle(self, timeout: int = 300) -> bool:
         """
         Wait for printer to become idle
         
         Args:
-            timeout (int): Maximum wait time in seconds
+            timeout: Maximum wait time in seconds
             
         Returns:
             bool: True if idle, False if timeout
@@ -177,24 +343,16 @@ class KlipperController:
         start_time = time.time()
         
         while time.time() - start_time < timeout:
-            try:
-                url = f"{self.base_url}/printer/objects/query"
-                params = {"print_stats": "state"}
-                
-                response = requests.get(url, params=params, timeout=5)
-                response.raise_for_status()
-                
-                result = response.json().get('result', {}).get('status', {})
-                state = result.get('print_stats', {}).get('state', '')
-                
-                if state in ['ready', 'standby'] or state == '':
-                    return True
-                    
-            except requests.exceptions.RequestException:
-                pass
-                
-            time.sleep(0.5)
+            state = self.get_printer_state()
             
+            if state in ['ready', 'standby', 'complete']:
+                return True
+            elif state == 'error':
+                print("⚠ Printer entered error state")
+                return False
+            
+            time.sleep(0.5)
+        
         print(f"⚠ Timeout waiting for idle state")
         return False
     
@@ -203,30 +361,35 @@ class KlipperController:
         Home specified axes
         
         Args:
-            axes (str): Axes to home (e.g., "XYZ", "XY", "Z")
+            axes: Axes to home (e.g., "XYZ", "XY", "Z")
             
         Returns:
             bool: True if successful
         """
-        if axes.upper() == "XYZ" or axes.upper() == "ALL":
+        if axes.upper() in ["XYZ", "ALL"]:
             command = "G28"
         else:
-            axis_list = " ".join([f"{axis.upper()}" for axis in axes.upper() if axis in "XYZ"])
-            if not axis_list:
-                print("Error: Invalid axes specified")
-                return False
-            command = f"G28 {axis_list}"
+            axis_list = []
+            for axis in axes.upper():
+                if axis in "XYZ":
+                    axis_list.append(axis)
             
-        print(f"Homing axes: {axes}")
+            if not axis_list:
+                print("❌ Error: Invalid axes specified")
+                return False
+            
+            command = f"G28 {' '.join(axis_list)}"
+        
+        print(f"🏠 Homing axes: {axes}")
         return self.send_gcode(command, wait_complete=True)
     
     def move_to(self, x=None, y=None, z=None, feedrate=3000) -> bool:
         """
-        Move to specified coordinates using linear movement
+        Move to specified coordinates
         
         Args:
-            x, y, z (float): Target coordinates (None to keep current)
-            feedrate (int): Movement speed in mm/min
+            x, y, z: Target coordinates (None to keep current)
+            feedrate: Movement speed in mm/min
             
         Returns:
             bool: True if successful
@@ -238,272 +401,87 @@ class KlipperController:
             coords.append(f"Y{y}")
         if z is not None:
             coords.append(f"Z{z}")
-            
+        
         if not coords:
-            print("Error: No coordinates specified")
+            print("❌ Error: No coordinates specified")
             return False
-            
+        
         command = f"G1 {' '.join(coords)} F{feedrate}"
+        print(f"🚀 Moving to: {' '.join(coords)}")
         return self.send_gcode(command, wait_complete=True)
     
-    def print_position(self, show_homed=True):
-        """Print current position"""
+    def print_position(self):
+        """Print current position and homing status"""
         pos = self.get_position()
+        homed = self.get_homed_axes()
+        
         if pos:
-            homed = self.get_homed_axes() if show_homed else ""
-            homed_status = f" (Homed: {homed.upper()})" if homed else " (Not homed)"
-            print(f"Position: X:{pos[0]:.3f} Y:{pos[1]:.3f} Z:{pos[2]:.3f} E:{pos[3]:.3f}{homed_status}")
+            homed_status = f"[{homed.upper()}]" if homed else "[NOT HOMED]"
+            print(f"📍 Position {homed_status}: X:{pos[0]:.3f} Y:{pos[1]:.3f} Z:{pos[2]:.3f} E:{pos[3]:.3f}")
         else:
-            print("Failed to get position")
+            print("❌ Failed to get position")
     
-    def start_position_monitoring(self, interval=1.0):
-        """
-        Start continuous position monitoring in background thread
+    def print_status(self):
+        """Print comprehensive printer status"""
+        print("\n" + "="*40)
+        print("PRINTER STATUS")
+        print("="*40)
         
-        Args:
-            interval (float): Update interval in seconds
-        """
-        if self.monitoring:
-            print("Position monitoring already running")
-            return
-            
-        self.monitoring = True
-        self.monitor_thread = threading.Thread(target=self._position_monitor, args=(interval,))
-        self.monitor_thread.daemon = True
-        self.monitor_thread.start()
-        print(f"✓ Started position monitoring (interval: {interval}s)")
-    
-    def stop_position_monitoring(self):
-        """Stop continuous position monitoring"""
-        if self.monitoring:
-            self.monitoring = False
-            if self.monitor_thread:
-                self.monitor_thread.join(timeout=2)
-            print("✓ Stopped position monitoring")
-    
-    def _position_monitor(self, interval):
-        """Internal position monitoring loop"""
-        last_pos = None
+        print(f"Connection: {'✓ Connected' if self.connected else '✗ Disconnected'}")
+        print(f"Printer State: {self.get_printer_state()}")
         
-        while self.monitoring and self.connected:
-            try:
-                current_pos = self.get_position()
-                
-                if current_pos and current_pos != last_pos:
-                    timestamp = time.strftime("%H:%M:%S")
-                    homed = self.get_homed_axes()
-                    homed_status = f"[{homed.upper()}]" if homed else "[---]"
-                    
-                    print(f"{timestamp} {homed_status} X:{current_pos[0]:.3f} Y:{current_pos[1]:.3f} Z:{current_pos[2]:.3f} E:{current_pos[3]:.3f}")
-                    last_pos = current_pos
-                
-                time.sleep(interval)
-                
-            except Exception as e:
-                if self.monitoring:  # Only print error if we're supposed to be monitoring
-                    print(f"Monitor error: {e}")
-                time.sleep(interval)
+        homed = self.get_homed_axes()
+        print(f"Homed Axes: {homed.upper() if homed else 'None'}")
+        
+        self.print_position()
+        print("="*40)
     
     def emergency_stop(self):
         """Emergency stop the printer"""
-        print("🚨 EMERGENCY STOP ACTIVATED!")
+        print("🚨 EMERGENCY STOP!")
         self.send_gcode("M112")
 
-class PrinterCLI:
-    """Command line interface for the simplified printer controller"""
-    
-    def __init__(self):
-        self.controller = KlipperController()
-        self.running = True
-        
-        # Setup signal handler for graceful shutdown
-        signal.signal(signal.SIGINT, self.signal_handler)
-        signal.signal(signal.SIGTERM, self.signal_handler)
-    
-    def signal_handler(self, signum, frame):
-        """Handle shutdown signals"""
-        print("\nShutting down...")
-        self.controller.stop_position_monitoring()
-        self.running = False
-        sys.exit(0)
-    
-    def run_interactive(self):
-        """Run interactive command line interface"""
-        print("Simplified Klipper Controller")
-        print("Movement & Position Monitoring Only")
-        print("==================================")
-        
-        if not self.controller.connect():
-            print("Failed to connect to printer. Exiting.")
-            return
-        
-        self.print_help()
-        
-        while self.running:
-            try:
-                command = input("\nklipper> ").strip().lower()
-                
-                if not command:
-                    continue
-                    
-                self.process_command(command)
-                
-            except (KeyboardInterrupt, EOFError):
-                break
-        
-        # Cleanup
-        self.controller.stop_position_monitoring()
-    
-    def process_command(self, command: str):
-        """Process user commands"""
-        parts = command.split()
-        cmd = parts[0] if parts else ""
-        
-        if cmd in ['quit', 'exit', 'q']:
-            self.running = False
-            
-        elif cmd == 'help' or cmd == 'h':
-            self.print_help()
-            
-        elif cmd == 'pos' or cmd == 'position':
-            self.controller.print_position()
-            
-        elif cmd == 'home':
-            axes = parts[1] if len(parts) > 1 else "XYZ"
-            self.controller.home_axes(axes)
-            
-        elif cmd == 'move':
-            self.handle_move_command(parts[1:])
-            
-        elif cmd == 'monitor':
-            if len(parts) > 1 and parts[1] == 'stop':
-                self.controller.stop_position_monitoring()
-            else:
-                interval = float(parts[1]) if len(parts) > 1 else 1.0
-                self.controller.start_position_monitoring(interval)
-                
-        elif cmd == 'gcode':
-            if len(parts) > 1:
-                gcode = ' '.join(parts[1:])
-                self.controller.send_gcode(gcode)
-            else:
-                print("Usage: gcode <command>")
-                
-        elif cmd == 'emergency' or cmd == 'estop':
-            self.controller.emergency_stop()
-            
-        else:
-            print(f"Unknown command: {cmd}. Type 'help' for available commands.")
-    
-    def handle_move_command(self, args):
-        """Handle move command"""
-        if not args:
-            print("Usage: move x<value> y<value> z<value> f<feedrate>")
-            return
-            
-        x = y = z = feedrate = None
-        
-        for arg in args:
-            try:
-                if arg.startswith('x'):
-                    x = float(arg[1:])
-                elif arg.startswith('y'):
-                    y = float(arg[1:])
-                elif arg.startswith('z'):
-                    z = float(arg[1:])
-                elif arg.startswith('f'):
-                    feedrate = int(arg[1:])
-            except ValueError:
-                print(f"Invalid value: {arg}")
-                return
-                
-        self.controller.move_to(x, y, z, feedrate or 3000)
-    
-    def print_help(self):
-        """Print help information"""
-        help_text = """
-Available Commands:
-==================
-help, h              - Show this help
-pos, position        - Show current position
-home [axes]          - Home axes (default: XYZ, options: X, Y, Z, XY, etc.)
-move x<val> y<val> z<val> f<feedrate> - Linear move to coordinates
-monitor [interval]   - Start position monitoring (default: 1s interval)
-monitor stop         - Stop position monitoring
-gcode <command>      - Send raw G-code command
-emergency, estop     - Emergency stop
-quit, exit, q        - Exit program
 
-Examples:
----------
-home XY              - Home X and Y axes only
-move x10 y20 z5      - Move to X10, Y20, Z5
-move z10 f1500       - Move Z to 10mm at 1500mm/min
-monitor 0.5          - Monitor position every 0.5 seconds
-monitor stop         - Stop monitoring
-gcode G1 X50 F6000   - Send custom linear move command
-"""
-        print(help_text)
-
-def main():
-    """Main function with command line argument parsing"""
-    parser = argparse.ArgumentParser(description="Simplified Klipper Controller - Movement Only")
-    parser.add_argument('--host', default='localhost', help='Moonraker host (default: localhost)')
-    parser.add_argument('--port', type=int, default=7125, help='Moonraker port (default: 7125)')
-    parser.add_argument('--timeout', type=int, default=10, help='Request timeout (default: 10s)')
+def test_connection():
+    """Test function to verify connection"""
+    print("Klipper Connection Test")
+    print("=" * 40)
     
-    # Command line operations
-    parser.add_argument('--home', metavar='AXES', help='Home specified axes (XYZ, XY, Z, etc.)')
-    parser.add_argument('--move', nargs='+', metavar='COORD', help='Move to coordinates (x10 y20 z5)')
-    parser.add_argument('--position', action='store_true', help='Show current position and exit')
-    parser.add_argument('--monitor', type=float, metavar='INTERVAL', help='Start position monitoring with interval')
-    parser.add_argument('--gcode', metavar='COMMAND', help='Send G-code command')
+    controller = KlipperController()
     
-    args = parser.parse_args()
-    
-    # Create controller
-    controller = KlipperController(args.host, args.port, args.timeout)
-    
-    if not controller.connect():
-        print("Failed to connect to printer. Exiting.")
-        sys.exit(1)
-    
-    # Handle command line operations
-    if args.position:
+    if controller.connect():
+        print("\n✅ Connection successful!")
+        controller.print_status()
+        
+        # Test basic operations
+        print("\nTesting basic operations...")
         controller.print_position()
-        return
         
-    if args.home:
-        controller.home_axes(args.home)
-        
-    if args.move:
-        x = y = z = feedrate = None
-        for arg in args.move:
-            if arg.startswith('x'):
-                x = float(arg[1:])
-            elif arg.startswith('y'):
-                y = float(arg[1:])
-            elif arg.startswith('z'):
-                z = float(arg[1:])
-            elif arg.startswith('f'):
-                feedrate = int(arg[1:])
-        controller.move_to(x, y, z, feedrate or 3000)
-        
-    if args.monitor:
-        controller.start_position_monitoring(args.monitor)
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            controller.stop_position_monitoring()
-            
-    if args.gcode:
-        controller.send_gcode(args.gcode)
-    
-    # If no specific commands, run interactive mode
-    if not any([args.home, args.move, args.position, args.monitor, args.gcode]):
-        cli = PrinterCLI()
-        cli.run_interactive()
+        return True
+    else:
+        print("\n❌ Connection failed!")
+        return False
+
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        test_connection()
+    else:
+        # Create controller instance
+        controller = KlipperController()
+        
+        # Test connection
+        if controller.connect():
+            print("\n✅ Ready for operations!")
+            
+            # Example usage
+            controller.print_status()
+            
+            # Uncomment these lines to test movement:
+            controller.home_axes("XYZ")
+            controller.move_to(x=50, y=50, z=10)
+            controller.print_position()
+            
+        else:
+            print("\n❌ Failed to connect to printer")
+            sys.exit(1)
