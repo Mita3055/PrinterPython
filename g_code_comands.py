@@ -615,8 +615,7 @@ def straight_line(start_x, start_y, length, qty, spacing, prnt):
     return output
 
 def capture_print(camera, x, y, z, prnt):
-    output = [""]
-    output.extend(f";;; CAPTURE:  {camera}, {x}, {y}, {z}")
+    output = [(f"CAPTURE,  {camera}, {x}, {y}, {z}")]
     return output
 
 

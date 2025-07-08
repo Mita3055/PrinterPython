@@ -27,7 +27,7 @@ CAMERAS = {
         'node': '/dev/video2',
         'capture_resolution': (1920, 1080),
         'preview_resolution': (640, 480),
-        'focus_value': 120,
+        'focus_value': None,
         'rotate': False
     }
 }
