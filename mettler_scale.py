@@ -39,7 +39,7 @@ class MettlerToledoDevice:
     
     # Get weight readings
     stable_weight = dev.get_weight_stable()  # Returns None if not stable
-    current_weight = dev.get_weight()        # Always returns current weight
+    current_weight = dev.get_weight()        # Always returns current weight (dynamic)
     
     # Zero the balance
     success = dev.zero_stable()  # Returns True/False

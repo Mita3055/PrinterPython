@@ -1,0 +1,251 @@
+DIW@raspberrypi:~/Desktop/PrinterPython $ /bin/python /home/DIW/Desktop/PrinterPython/main.py
+Initialized controller for http://localhost:7125
+==================================================
+CONNECTING TO PRINTER
+==================================================
+Testing Moonraker connection...
+✓ Moonraker reachable - Version: v0.9.3-48-g354cc11
+Testing printer info endpoint...
+✓ Printer info available - State: ready
+
+Connection Test Results:
+  Moonraker reachable: ✓
+  Printer info available: ✓
+  Printer state: ready
+  Klipper connected: ✓
+
+✅ SUCCESS: Printer is ready!
+
+Printer Details:
+  Hostname: raspberrypi
+  Software: v0.12.0-432-gfec3e685c
+  MCU: unknown
+
+Safety: Turning off heaters...
+✓ Heaters set to 0°C
+Created data directory: data/20250707_201244
+Initializing camera system...
+✓ Camera 1 (Overhead Camera): /dev/video0
+✓ Camera 2 (Side Camera): /dev/video2
+✓ Camera system initialized with 2 camera(s)
+Available cameras: 2
+ - Overhead Camera (ID 1): /dev/video0
+ - Side Camera (ID 2): /dev/video2
+Camera 1 focus value: 120
+Camera 2 focus value: None
+Error saving toolpath: not enough values to unpack (expected 4, got 0)
+Ready to print. Click 'Begin Print Sequence' in the GUI.
+Print sequence initiated!
+✓ Camera 1 focus set to 120
+→ 
+✓ Camera 2 focus set to None
+Initializing camera system...
+✓ Camera 1 (Overhead Camera): /dev/video0
+✓ Camera 2 (Side Camera): /dev/video2
+✓ Camera system initialized with 2 camera(s)
+→ 
+→ G90; Absolute Cordinates
+→ G1 X10 Y37 Z5 F5000 
+→ G1 Z1.1 F5000
+→ G91; Relative Cordinates
+→ G1 Y5 E-0.400000 F1200
+→ G1 Y15 E-1.200000 F1200
+→ G1 X3 E-0.240000 F1200
+→ G1 Y-15 E-1.200000 F1200
+→ G1 X3 E-0.240000 F1200
+→ G1 Y15 E-1.200000 F1200
+→ G1 X3 E-0.240000 F1200
+→ G1 Y-15 E-1.200000 F1200
+→ G1 X3 E-0.240000 F1200
+→ G1 Y15 E-1.200000 F1200
+→ G1 X3 E-0.240000 F1200
+→ G1 Y-15 E-1.200000 F1200
+→ G1 X-15 E-1.200000 F1200
+→ G1 Y3 E-0.240000 F1200
+→ G1 X15 E-1.200000 F1200
+→ G1 Y3 E-0.240000 F1200
+→ G1 X-15 E-1.200000 F1200
+→ G1 Y3 E-0.240000 F1200
+→ G1 X15 E-1.200000 F1200
+→ G1 Y3 E-0.240000 F1200
+→ G1 X-15 E-1.200000 F1200
+→ G1 Y3 E-0.240000 F1200
+→ G1 X20 E-1.600000 F1200
+→ 
+→ C
+→ A
+→ P
+→ T
+→ U
+→ R
+→ E
+→ ,
+→  
+→  
+→ 1
+→ ,
+→  
+→ 1
+→ 7
+→ .
+→ 5
+→ ,
+→  
+→ 0
+→ ,
+→  
+→ 6
+→ 0
+→ 
+→ 
+→ G90; Absolute Cordinates
+→ G1 X40 Y35 Z10 F5000 
+→ G1 Z1.1 F5000
+→ G91; Relative Cordinates
+→ G1 Y5 E-0.400000 F1200
+→ G1 Y40 E-3.200000 F1200
+→ G1 X5 E-0.400000 F1200
+→ G1 Y-40 E-3.200000 F1200
+→ G1 X4.75 E-0.380000 F1200
+→ G1 Y40 E-3.200000 F1200
+→ G1 X4.5125 E-0.361000 F1200
+→ G1 Y-40 E-3.200000 F1200
+→ G1 X4.286875 E-0.342950 F1200
+→ G1 Y40 E-3.200000 F1200
+→ G1 X4.07253125 E-0.325802 F1200
+→ G1 Y-40 E-3.200000 F1200
+→ G1 X3.8689046874999997 E-0.309512 F1200
+→ G1 Y40 E-3.200000 F1200
+→ G1 X3.6754594531249998 E-0.294037 F1200
+→ G1 Y-40 E-3.200000 F1200
+→ G1 X3.4916864804687497 E-0.279335 F1200
+→ G1 Y40 E-3.200000 F1200
+→ G1 X3.317102156445312 E-0.265368 F1200
+→ G1 Y-40 E-3.200000 F1200
+→ G1 X3.151247048623046 E-0.252100 F1200
+→ G1 Z10 F5000
+→ 
+→ C
+→ A
+→ P
+→ T
+→ U
+→ R
+→ E
+→ ,
+→  
+→  
+→ 1
+→ ,
+→  
+→ 7
+→ .
+→ 5
+→ ,
+→  
+→ 1
+→ 7
+→ .
+→ 5
+→ ,
+→  
+→ 0
+→ 
+→ 
+→ G90; Absolute Cordinates
+→ G1 X40 Y85 Z6.1 F5000 
+→ G1 Z1.1 F5000
+→ G91; Relative Cordinates
+❌ Failed to send 'G1 X0 Y5 Z-5 F5000 ': 400 Client Error: Move out of range: 40.000 90.000 -3.900 [-122.420] for url: http://localhost:7125/printer/gcode/script
+→ G1 Y40 E-3.200000 F1200
+→ G1 X0 Y5 Z5 F5000 
+→ G1 X5 Y-45 Z0 F5000 
+→ G1 X0 Y5 Z-5 F5000 
+→ G1 Y40 E-3.200000 F1200
+→ G1 X0 Y5 Z5 F5000 
+→ G1 X5 Y-45 Z0 F5000 
+→ G1 X0 Y5 Z-5 F5000 
+→ G1 Y40 E-3.200000 F1200
+→ G1 X0 Y5 Z5 F5000 
+→ G1 X5 Y-45 Z0 F5000 
+→ G1 X0 Y5 Z-5 F5000 
+→ G1 Y40 E-3.200000 F1200
+→ G1 X0 Y5 Z5 F5000 
+→ G1 X5 Y-45 Z0 F5000 
+→ G1 X0 Y5 Z-5 F5000 
+→ G1 Y40 E-3.200000 F1200
+→ G1 X0 Y5 Z5 F5000 
+→ G1 X5 Y-45 Z0 F5000 
+→ G1 Z10 F5000
+→ 
+→ C
+→ A
+→ P
+→ T
+→ U
+→ R
+→ E
+→ ,
+→  
+→  
+→ 1
+→ ,
+→  
+→ 7
+→ .
+→ 5
+→ ,
+→  
+→ 1
+→ 7
+→ .
+→ 5
+→ ,
+→  
+→ 0
+Capturing final images...
+📸 Capturing from camera 1 (Overhead Camera)...
+📸 Capturing from camera 2 (Side Camera)...
+Camera 1 final capture: ✗ fswebcam failed: --- Opening /dev/video0...
+Trying source module v4l2...
+/dev/video0 opened.
+src_v4l2_get_capability,87: /dev/video0 information:
+src_v4l2_get_capability,88: cap.driver: "uvcvideo"
+src_v4l2_get_capability,89: cap.card: "48MP USB Camera: 48MP USB Camer"
+src_v4l2_get_capability,90: cap.bus_info: "usb-xhci-hcd.1-1"
+src_v4l2_get_capability,91: cap.capabilities=0x84A00001
+src_v4l2_get_capability,92: - VIDEO_CAPTURE
+src_v4l2_get_capability,103: - STREAMING
+No input was specified, using the first.
+src_v4l2_set_input,181: /dev/video0: Input 0 information:
+src_v4l2_set_input,182: name = "Camera 1"
+src_v4l2_set_input,183: type = 00000002
+src_v4l2_set_input,185: - CAMERA
+src_v4l2_set_input,186: audioset = 00000000
+src_v4l2_set_input,187: tuner = 00000000
+src_v4l2_set_input,188: status = 00000000
+Error selecting input 0
+VIDIOC_S_INPUT: Device or resource busy
+
+Camera 2 final capture: ✗ fswebcam failed: --- Opening /dev/video2...
+Trying source module v4l2...
+/dev/video2 opened.
+src_v4l2_get_capability,87: /dev/video2 information:
+src_v4l2_get_capability,88: cap.driver: "uvcvideo"
+src_v4l2_get_capability,89: cap.card: "H264 USB Camera: USB Camera"
+src_v4l2_get_capability,90: cap.bus_info: "usb-xhci-hcd.1-2"
+src_v4l2_get_capability,91: cap.capabilities=0x84A00001
+src_v4l2_get_capability,92: - VIDEO_CAPTURE
+src_v4l2_get_capability,103: - STREAMING
+No input was specified, using the first.
+src_v4l2_set_input,181: /dev/video2: Input 0 information:
+src_v4l2_set_input,182: name = "Camera 1"
+src_v4l2_set_input,183: type = 00000002
+src_v4l2_set_input,185: - CAMERA
+src_v4l2_set_input,186: audioset = 00000000
+src_v4l2_set_input,187: tuner = 00000000
+src_v4l2_set_input,188: status = 00000000
+Error selecting input 0
+VIDIOC_S_INPUT: Device or resource busy
+
+Print sequence completed.

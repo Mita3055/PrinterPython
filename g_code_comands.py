@@ -47,8 +47,26 @@ def home():
     return output
 
 def pause(delay):
-    output = [f"G4 S{delay}"]
+    output = ["",
+              ";Pausing for {delay} seconds",
+              f"PASUE, {delay}",
+              ""]
     return output
+
+
+def capture_print(camera, x, y, z, file_name=None, time_lapse=False, time_lapse_interval=30, time_lapse_duration=1800):
+    if not time_lapse:
+            output = ["",
+              ";Capturing Immage",
+              f"CAPTURE,  {camera}, {x}, {y}, {z}, {file_name}",
+              ""]
+    else:
+        output = ["",
+              ";Capturing Time Lapse",
+              f"CAPTURE,  {camera}, {x}, {y}, {z}, {file_name}, {time_lapse} , {time_lapse_interval}, {time_lapse_duration}",
+              ""]
+    return output
+
 
 def motorOff():
     output = ["M84"]
@@ -613,12 +631,6 @@ def straight_line(start_x, start_y, length, qty, spacing, prnt):
 
     output.extend(moveZ(10, prnt))
     return output
-
-def capture_print(camera, x, y, z, prnt):
-    output = [""]
-    output.extend(f";;; CAPTURE:  {camera}, {x}, {y}, {z}")
-    return output
-
 
 def ZB2_test(start_x, start_y, length, qty, spacing, prnt):
     output = ["", "", ";3D ZB2 Test",
