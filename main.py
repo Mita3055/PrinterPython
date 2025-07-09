@@ -11,6 +11,7 @@ import os
 from datetime import datetime
 from klipper_controller import KlipperController
 #from utills.loadcell import getLoad, initialize_loadcell
+<<<<<<< HEAD
 from g_code_comands import *
 from data_collection import DataCollector
 import tkinter as tk
@@ -24,6 +25,16 @@ from camera_integration import (
     get_available_cameras, VIDEO_DEVICES
 )
 
+=======
+from camera_integration import *
+from g_code_comands import *
+from data_collection import DataCollector
+import tkinter as tk
+from Camera_gui import CameraGUI
+from configs import *
+import threading
+
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
 # Global variable for print sequence control
 print_sequence_started = False
 
@@ -145,6 +156,7 @@ def save_toolpath(toolpath, data_folder):
             print(f"✗ Error saving toolpath: {e}")
             return None
 
+<<<<<<< HEAD
  # change to time based capture           
 def capture_live_print(comand, klipper_ctrl, prnt , file_path):
 
@@ -232,16 +244,89 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
             return None
 
         
+=======
+            
+def capture_live_print(camera_id, x, y, z, time_lapse=False, time_lapse_interval=30, time_lapse_duration=1800, data_folder=None):
+    """
+    Capture live print images with optional timelapse functionality
+    
+    Args:
+        camera_id: Camera ID to capture from
+        x, y, z: Current position coordinates
+        time_lapse: Enable timelapse mode
+        time_lapse_interval: Seconds between captures in timelapse mode
+        time_lapse_duration: Total duration for timelapse in seconds
+        data_folder: Folder to save images (uses current timestamped folder if None)
+    """
+    if data_folder is None:
+        data_folder = data_directory()
+    
+    timestamp = datetime.now().strftime("%H_%M_%S")
+    base_filename = f"camera{camera_id}_pos_{x}_{y}_{z}_{timestamp}"
+    
+    if not time_lapse:
+        # Single capture
+        filename = f"{base_filename}.jpg"
+        
+        try:
+            success, result = capture_image(camera_id=camera_id, filename=filename, method='fswebcam')
+            if success:
+                print(f"✓ Captured image: {result}")
+                return result
+            else:
+                print(f"✗ Capture failed: {result}")
+                return None
+        except Exception as e:
+            print(f"✗ Error capturing image: {e}")
+            return None
+    else:
+        # Timelapse capture
+        print(f"Starting timelapse: {time_lapse_duration}s duration, {time_lapse_interval}s intervals")
+        
+        captured_files = []
+        start_time = time.time()
+        
+        for i in range(0, time_lapse_duration, time_lapse_interval):
+            elapsed = time.time() - start_time
+            if elapsed >= time_lapse_duration:
+                break
+                
+            frame_filename = f"{base_filename}_frame_{i//time_lapse_interval:04d}.jpg"
+            
+            try:
+                success, result = capture_image(camera_id=camera_id, filename=frame_filename, method='fswebcam')
+                if success:
+                    captured_files.append(result)
+                    print(f"✓ Frame {i//time_lapse_interval:04d}: {result}")
+                else:
+                    print(f"✗ Frame {i//time_lapse_interval:04d} failed: {result}")
+                
+                # Sleep for the interval (except for the last frame)
+                if elapsed + time_lapse_interval < time_lapse_duration:
+                    time.sleep(time_lapse_interval)
+                    
+            except Exception as e:
+                print(f"✗ Error capturing frame {i//time_lapse_interval}: {e}")
+        
+        print(f"✓ Timelapse complete: {len(captured_files)} frames captured")
+        return captured_files
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
 
 def main():
 
     # Initialize controller (localhost since running on Pi)
+<<<<<<< HEAD
     klipper = KlipperController()
     klipper.connect()
+=======
+    printer = KlipperController()
+    printer.connect()
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
     
     # Initialize loadcell
     #initialize_loadcell()
     
+<<<<<<< HEAD
     # Create data folder and initialize camera system
     data_folder = data_directory()
 
@@ -250,6 +335,47 @@ def main():
    
     # Print available cameras and their info
     printer = MXeneProfile_pet_25G  # Example: using PET 25G profile
+=======
+    
+    # Create data folder and initialize camera system
+    data_folder = data_directory()
+
+
+    initialize_camera_system(data_folder)
+    cameras = list_cameras()
+
+
+    print(f"Available cameras: {len(cameras)}")
+    for camera in cameras:
+        print(f"  - {camera['name']} ({camera['id']}) at {camera['node']}")
+    
+    # Configure camera focus settings
+    print("Configuring camera focus settings...")
+    camera_info = get_camera_info(1)  # Overhead Camera
+    if camera_info:
+        print(f"Overhead Camera: {camera_info['capture_resolution']} resolution")
+    
+    camera_info = get_camera_info(2)  # Side Camera  
+    if camera_info:
+        print(f"Side Camera: {camera_info['capture_resolution']} resolution")
+
+
+    #Opening printer GUI
+    
+    def run_gui():
+        root = tk.Tk()
+        app = CameraGUI(root)
+        root.mainloop()
+    
+    gui_thread = threading.Thread(target=run_gui, daemon=True)
+    gui_thread.start()
+    
+    # Initialize printer and capacitor parameters
+    print("Initializing printer and capacitor parameters...")
+    
+    # Select printer profile (choose one based on your needs)
+    printer_profile = MXeneProfile_pet_25G  # Example: using PET 25G profile
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
     capacitor_profile = stdCap  # Example: using standard capacitor
     printer.set_print_height(print_height=2.5, bed_height=2.5)
 
@@ -267,15 +393,42 @@ def main():
     toolpath = generate_toolpath(prnt=printer, cap=capacitor_profile)
     save_toolpath(toolpath, data_folder)
 
+<<<<<<< HEAD
     #data_collector = DataCollector()
     #data_collector.record_print_data(printer, getLoad)
 
 
+=======
+    data_collector = DataCollector()
+    #data_collector.record_print_data(printer, getLoad)
+
+
+
+    print("Ready to print.")
+    print("Click 'Begin Print Sequence' in the GUI to start printing.")
+    
+    # Wait for the user to click the button in the GUI
+    # We'll use a simple polling mechanism to check if the button was clicked
+    global print_sequence_started
+    print_sequence_started = False
+    
+    def check_button_click():
+        global print_sequence_started
+        if print_sequence_started:
+            return True
+        return False
+    
+    # Wait for button click (poll every 100ms)
+    while not check_button_click():
+        time.sleep(0.1)
+    
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
     print("Print sequence initiated by user!")
     
     for comand in toolpath:
         if "CAPTURE" in comand:
             try:
+<<<<<<< HEAD
                 capture_live_print(
                     comand=comand, 
                     klipper_ctrl=klipper, 
@@ -305,12 +458,57 @@ def main():
             klipper.send_gcode(comand)
             time.sleep(0.01)
 
+=======
+                # Parse CAPTURE command: "CAPTURE, camera, x, y, z"
+                parts = [part.strip() for part in comand.split(",")]
+                if len(parts) != 5:
+                    print(f"✗ Invalid CAPTURE format: {comand}")
+                    continue
+                    
+                camera = int(parts[1])
+                x = float(parts[2])
+                y = float(parts[3])
+                z = float(parts[4])
+
+                print(f"Capturing image from camera {camera} at {x}, {y}, {z}")
+                printer.send_gcode(absolute()[0])
+                printer.send_gcode(movePrintHead(0, 0, z, printer_profile)[0])
+                printer.send_gcode(movePrintHead(x, y, 0, printer_profile)[0])
+                
+                # Use the improved capture_live_print function
+                result = capture_live_print(
+                    camera_id=camera,
+                    x=x, y=y, z=z,
+                    time_lapse=False,  # Set to True for timelapse mode
+                    data_folder=data_folder
+                )
+                
+                if result:
+                    print(f"✓ Capture completed: {result}")
+                else:
+                    print(f"✗ Capture failed")
+                
+                time.sleep(1)
+                
+            except (ValueError, IndexError) as e:
+                print(f"✗ Error parsing CAPTURE command '{comand}': {e}")
+                continue
+
+        elif ";" not in comand:
+            printer.send_gcode(comand)
+            time.sleep(0.01)
+
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
     #data_collector.stop_record_data()
     
     # Optional: Capture final images from all cameras
     print("Capturing final images from all cameras...")
     from camera_integration import capture_all_cameras
+<<<<<<< HEAD
     final_captures = capture_all_cameras(filename_prefix="final")
+=======
+    final_captures = capture_all_cameras(filename_prefix="final", method='fswebcam')
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
     
     for camera_id, (success, result) in final_captures.items():
         if success:

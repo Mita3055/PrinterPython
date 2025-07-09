@@ -1,48 +1,11 @@
 #!/usr/bin/env python3
 """
-<<<<<<< HEAD
-Camera GUI Application
-User interface for multi-camera control system
-Uses camera_operations.py for all camera functionality
+Comprehensive Printer GUI with Camera Control and Toolpath Execution
+Combines printer control, camera preview, timelapse, and toolpath execution
 """
 
 import tkinter as tk
-from tkinter import filedialog, messagebox
-import threading
-import time
-import os
-from PIL import Image, ImageTk
-import cv2
-
-# Import camera operations
-from camera_integration import (
-    VIDEO_DEVICES, FOCUS_MIN, FOCUS_MAX,
-    check_dependencies, get_available_cameras, initialize_cameras,
-    capture_image, capture_all_cameras, set_camera_focus,
-    start_timelapse, stop_timelapse, is_timelapse_active,
-    start_preview_stream, stop_preview_stream, get_preview_frame,
-    cleanup_all
-)
-
-class MultiCameraApp:
-    """Main camera GUI application"""
-    
-    def __init__(self, root):
-        self.root = root
-        root.title("Multi-Camera Still Capture System")
-        root.geometry("1000x800")
-        
-        # Application state
-        self.save_folder = os.getcwd()
-        self.active_devices = []
-        self.timelapse_controls = {}
-=======
-Camera GUI with Timelapse Functionality
-Camera preview and control system with timelapse capabilities
-"""
-
-import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from PIL import Image, ImageTk
 import threading
 import time
@@ -61,38 +24,51 @@ from camera_integration import (
     set_gui_instance
 )
 
+# Import the Klipper controller and other modules
+from klipper_controller import KlipperController
+from g_code_comands import *
+from configs import *
+from data_collection import DataCollector
+
+# Import generate_toolpath from main
+from main import generate_toolpath
+
 # Focus range constants
 FOCUS_MIN, FOCUS_MAX = 0, 127
 
 # Global variable for print sequence control
 print_sequence_started = False
 
-class CameraGUI:
+class PrinterGUI:
     def __init__(self, root):
         self.root = root
-        root.title("Camera Control with Timelapse")
-        root.geometry("1400x900")
+        root.title("Comprehensive Printer Control with Camera System")
+        root.geometry("1600x1000")
         
         # Camera system
         self.streams = {}
         self.active_devices = []
         self.focus_sliders = {}
         self.focus_values = {}
->>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
         self.video_labels = {}
         self.status_labels = {}
         self.camera_frames = {}
         
-<<<<<<< HEAD
-        # Initialize the camera system
-        self._initialize_system()
+        # Printer state
+        self.printer_connected = False
+        self.printing_active = False
+        self.printer_controller = None
+        self.data_folder = None
         
-        # Create the user interface
-=======
         # Timelapse state
         self.timelapse_active = False
         self.timelapse_thread = None
-        self.data_folder = None
+        
+        # Print sequence state
+        self.toolpath = []
+        self.printer_profile = None
+        self.capacitor_profile = None
+        self.data_collector = None
         
         # Initialize camera system
         self._initialize_cameras()
@@ -101,115 +77,11 @@ class CameraGUI:
         self._initialize_camera_integration()
         
         # Create UI
->>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
         self._create_ui()
         
         # Start preview streams
         self._start_previews()
         
-<<<<<<< HEAD
-        # Setup event handlers
-        root.protocol("WM_DELETE_WINDOW", self.on_close)
-        
-        # Start the GUI update loop
-        self.update_loop()
-
-    def _initialize_system(self):
-        """Initialize the camera system"""
-        print("Initializing camera system...")
-        
-        # Check dependencies first
-        if not check_dependencies():
-            messagebox.showerror("Dependencies Missing", 
-                               "Required camera tools not found. Check console for details.")
-            return
-        
-        # Initialize cameras
-        if not initialize_cameras():
-            messagebox.showwarning("No Cameras", 
-                                 "No cameras could be initialized. Check connections.")
-        
-        # Get available cameras
-        self.active_devices = get_available_cameras()
-        print(f"Active devices: {self.active_devices}")
-
-    def _create_ui(self):
-        """Create the user interface"""
-        # Title
-        title_frame = tk.Frame(self.root)
-        title_frame.pack(pady=10)
-        tk.Label(title_frame, text="Multi-Camera Still Capture System", 
-                font=('Arial', 16, 'bold')).pack()
-        
-        # Save folder selection
-        self._create_folder_selection()
-        
-        # Camera panels
-        for device_id in self.active_devices:
-            config = VIDEO_DEVICES[device_id]
-            self._create_camera_panel(device_id, config)
-        
-        # Global controls
-        self._create_global_controls()
-
-    def _create_folder_selection(self):
-        """Create save folder selection UI"""
-        folder_frame = tk.Frame(self.root)
-        folder_frame.pack(pady=5, fill=tk.X, padx=20)
-        
-        tk.Label(folder_frame, text="Save Folder:", font=('Arial', 10, 'bold')).pack(side=tk.LEFT)
-        
-        self.folder_label = tk.Label(folder_frame, text=self.save_folder, 
-                                   bg='white', relief=tk.SUNKEN, anchor='w')
-        self.folder_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        
-        tk.Button(folder_frame, text="Browse", command=self.select_save_folder,
-                 bg='lightblue').pack(side=tk.RIGHT)
-
-    def _create_camera_panel(self, device_id: str, config: dict):
-        """Create UI panel for a single camera"""
-        # Main camera frame
-        frame = tk.LabelFrame(self.root, text=f"{config['name']} ({config['node']})", 
-                            font=('Arial', 10, 'bold'))
-        frame.pack(pady=5, padx=20, fill=tk.X)
-        
-        # Video preview frame
-        video_frame = tk.Frame(frame, bg='black', width=320, height=240)
-        video_frame.pack(side=tk.LEFT, padx=10, pady=10)
-        video_frame.pack_propagate(False)
-        
-        video_label = tk.Label(video_frame, text="Starting preview...", 
-                             bg='black', fg='white')
-        video_label.pack(expand=True)
-        self.video_labels[device_id] = video_label
-        
-        # Controls frame
-        controls_frame = tk.Frame(frame)
-        controls_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Camera information
-        self._create_camera_info(controls_frame, config)
-        
-        # Focus control
-        self._create_focus_control(controls_frame, config)
-        
-        # Capture button
-        self._create_capture_button(controls_frame, device_id, config)
-        
-        # Time-lapse controls
-        self._create_timelapse_controls(controls_frame, device_id)
-        
-        # Status label
-        status_label = tk.Label(controls_frame, text="Initializing...", fg="orange")
-        status_label.pack(anchor='w')
-        self.status_labels[device_id] = status_label
-        
-        # Store frame reference
-        self.camera_frames[device_id] = frame
-
-    def _create_camera_info(self, parent, config):
-        """Create camera information display"""
-=======
         # Start update loop
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.update_loop()
@@ -253,7 +125,7 @@ class CameraGUI:
         title_frame = ttk.Frame(main_frame)
         title_frame.pack(fill=tk.X, pady=(0, 10))
         
-        ttk.Label(title_frame, text="Camera Control with Timelapse", 
+        ttk.Label(title_frame, text="Comprehensive Printer Control with Camera System", 
                 font=('Arial', 16, 'bold')).pack()
         
         # Create notebook for tabs
@@ -263,8 +135,14 @@ class CameraGUI:
         # Camera preview tab
         self._create_camera_tab()
         
+        # Printer control tab
+        self._create_printer_tab()
+        
         # Timelapse tab
         self._create_timelapse_tab()
+        
+        # Toolpath tab
+        self._create_toolpath_tab()
         
         # Settings tab
         self._create_settings_tab()
@@ -325,162 +203,10 @@ class CameraGUI:
         self.video_labels[camera_id] = video_label
         
         # Camera info
->>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
         info_text = f"Preview: {config['preview_resolution'][0]}x{config['preview_resolution'][1]}\n"
         info_text += f"Capture: {config['capture_resolution'][0]}x{config['capture_resolution'][1]}\n"
         info_text += f"Rotation: {'180°' if config['rotate'] else 'None'}"
         
-<<<<<<< HEAD
-        tk.Label(parent, text=info_text, justify=tk.LEFT, 
-                font=('Arial', 9)).pack(anchor='w')
-
-    def _create_focus_control(self, parent, config):
-        """Create focus control slider"""
-        focus_frame = tk.Frame(parent)
-        focus_frame.pack(fill=tk.X, pady=5)
-        
-        tk.Label(focus_frame, text="Focus:", font=('Arial', 8)).pack(anchor='w')
-        
-        # Focus slider
-        def on_focus_change(value):
-            focus_val = int(value)
-            set_camera_focus(config['node'], focus_val)
-        
-        focus_slider = tk.Scale(focus_frame, from_=FOCUS_MAX, to=FOCUS_MIN, 
-                              orient=tk.HORIZONTAL, length=200,
-                              command=on_focus_change)
-        
-        # Set initial focus value
-        initial_focus = config['focus_value'] if config['focus_value'] is not None else FOCUS_MAX//2
-        focus_slider.set(initial_focus)
-        focus_slider.pack(fill=tk.X)
-
-    def _create_capture_button(self, parent, device_id, config):
-        """Create individual camera capture button"""
-        capture_btn = tk.Button(
-            parent,
-            text=f"📷 Capture {config['name']}",
-            command=lambda: self.capture_single(device_id),
-            bg='blue',
-            fg='white'
-        )
-        capture_btn.pack(pady=5, fill=tk.X)
-
-    def _create_timelapse_controls(self, parent, device_id):
-        """Create time-lapse control panel"""
-        timelapse_frame = tk.LabelFrame(parent, text="Time-lapse", font=('Arial', 9, 'bold'))
-        timelapse_frame.pack(pady=5, fill=tk.X)
-        
-        # Interval input
-        interval_frame = tk.Frame(timelapse_frame)
-        interval_frame.pack(fill=tk.X, padx=5, pady=2)
-        tk.Label(interval_frame, text="Interval (seconds):", font=('Arial', 8)).pack(side=tk.LEFT)
-        interval_var = tk.StringVar(value="30")
-        interval_entry = tk.Entry(interval_frame, textvariable=interval_var, width=8)
-        interval_entry.pack(side=tk.RIGHT)
-        
-        # Duration input
-        duration_frame = tk.Frame(timelapse_frame)
-        duration_frame.pack(fill=tk.X, padx=5, pady=2)
-        tk.Label(duration_frame, text="Duration (seconds):", font=('Arial', 8)).pack(side=tk.LEFT)
-        duration_var = tk.StringVar(value="600")
-        duration_entry = tk.Entry(duration_frame, textvariable=duration_var, width=8)
-        duration_entry.pack(side=tk.RIGHT)
-        
-        # Time-lapse button
-        timelapse_btn = tk.Button(
-            timelapse_frame,
-            text="🎬 Start Time-lapse",
-            command=lambda: self.toggle_timelapse(device_id),
-            bg='purple',
-            fg='white',
-            font=('Arial', 8)
-        )
-        timelapse_btn.pack(pady=3, fill=tk.X)
-        
-        # Time-lapse status
-        timelapse_status = tk.Label(timelapse_frame, text="Ready", fg="green", font=('Arial', 8))
-        timelapse_status.pack()
-        
-        # Store references
-        self.timelapse_controls[device_id] = {
-            'interval_var': interval_var,
-            'duration_var': duration_var,
-            'button': timelapse_btn,
-            'status': timelapse_status
-        }
-
-    def _create_global_controls(self):
-        """Create global control buttons"""
-        control_frame = tk.Frame(self.root)
-        control_frame.pack(pady=10, fill=tk.X, padx=20)
-        
-        # Capture all cameras button
-        self.capture_all_btn = tk.Button(
-            control_frame,
-            text="📸 Capture All Cameras",
-            command=self.capture_all,
-            bg='green',
-            fg='white',
-            font=('Arial', 12, 'bold')
-        )
-        self.capture_all_btn.pack(pady=5)
-        
-        # Global status label
-        self.global_status = tk.Label(control_frame, text="Ready", fg="green")
-        self.global_status.pack(pady=5)
-
-    def _start_previews(self):
-        """Start preview streams for all active cameras"""
-        for device_id in self.active_devices:
-            if start_preview_stream(device_id):
-                self.status_labels[device_id].config(text="Preview active", fg="green")
-            else:
-                self.status_labels[device_id].config(text="Preview failed", fg="red")
-
-    def select_save_folder(self):
-        """Open folder selection dialog"""
-        folder = filedialog.askdirectory(initialdir=self.save_folder, 
-                                       title="Select Save Folder")
-        if folder:
-            self.save_folder = folder
-            self.folder_label.config(text=folder)
-            print(f"[+] Save folder changed to: {folder}")
-
-    def capture_single(self, device_id):
-        """Capture from a single camera"""
-        self.status_labels[device_id].config(text="Capturing...", fg="orange")
-        
-        # Run capture in background thread
-        threading.Thread(target=self._do_single_capture, args=(device_id,), daemon=True).start()
-
-    def _do_single_capture(self, device_id):
-        """Background single capture process"""
-        try:
-            success, result = capture_image(device_id, self.save_folder)
-            
-            if self.root.winfo_exists():
-                if success:
-                    filename = os.path.basename(result)
-                    self.root.after(0, lambda: self.status_labels[device_id].config(
-                        text=f"✓ Saved: {filename}", fg="green"
-                    ))
-                else:
-                    self.root.after(0, lambda: self.status_labels[device_id].config(
-                        text=f"✗ Failed: {result}", fg="red"
-                    ))
-                    
-        except Exception as e:
-            print(f"[!] Capture error for {device_id}: {e}")
-            if self.root.winfo_exists():
-                self.root.after(0, lambda: self.status_labels[device_id].config(
-                    text="Capture error", fg="red"
-                ))
-
-    def capture_all(self):
-        """Capture from all active cameras simultaneously"""
-        self.global_status.config(text="Capturing from all cameras...", fg="orange")
-=======
         info_label = ttk.Label(camera_frame, text=info_text, font=('Arial', 9))
         info_label.pack(pady=5)
         
@@ -544,6 +270,54 @@ class CameraGUI:
         # Global status
         self.global_status = ttk.Label(control_frame, text="Ready", foreground="green")
         self.global_status.pack(pady=5)
+
+    def _create_printer_tab(self):
+        """Create the printer control tab"""
+        printer_frame = ttk.Frame(self.notebook)
+        self.notebook.add(printer_frame, text="🖨️ Printer Control")
+        
+        # Printer status
+        status_frame = ttk.LabelFrame(printer_frame, text="Printer Status")
+        status_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.printer_status_label = ttk.Label(status_frame, text="Not Connected", foreground="red")
+        self.printer_status_label.pack(pady=5)
+        
+        # Connection controls
+        conn_frame = ttk.LabelFrame(printer_frame, text="Connection")
+        conn_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Button(conn_frame, text="Connect to Printer", command=self.connect_printer).pack(pady=5)
+        ttk.Button(conn_frame, text="Disconnect", command=self.disconnect_printer).pack(pady=5)
+        
+        # Manual printer controls
+        manual_frame = ttk.LabelFrame(printer_frame, text="Manual Control")
+        manual_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Home buttons
+        home_frame = ttk.Frame(manual_frame)
+        home_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Button(home_frame, text="Home All", command=lambda: self.home_axes("XYZ")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(home_frame, text="Home XY", command=lambda: self.home_axes("XY")).pack(side=tk.LEFT, padx=5)
+        ttk.Button(home_frame, text="Home Z", command=lambda: self.home_axes("Z")).pack(side=tk.LEFT, padx=5)
+        
+        # Position display
+        pos_frame = ttk.Frame(manual_frame)
+        pos_frame.pack(fill=tk.X, pady=5)
+        
+        self.position_label = ttk.Label(pos_frame, text="Position: X:0.000 Y:0.000 Z:0.000 E:0.000")
+        self.position_label.pack(side=tk.LEFT)
+        
+        ttk.Button(pos_frame, text="Update Position", command=self.update_position_display).pack(side=tk.RIGHT, padx=5)
+        
+        # Emergency stop
+        emergency_frame = ttk.Frame(printer_frame)
+        emergency_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Button(emergency_frame, text="🚨 EMERGENCY STOP", 
+                  command=self.emergency_stop, 
+                  style="Emergency.TButton").pack(pady=5)
 
     def _create_timelapse_tab(self):
         """Create the timelapse control tab"""
@@ -615,6 +389,42 @@ class CameraGUI:
         # Status label
         self.timelapse_status = ttk.Label(control_frame, text="Ready to start timelapse", foreground="green")
         self.timelapse_status.pack(pady=5)
+
+    def _create_toolpath_tab(self):
+        """Create the toolpath configuration tab"""
+        toolpath_frame = ttk.Frame(self.notebook)
+        self.notebook.add(toolpath_frame, text="🛤️ Toolpath Configuration")
+        
+        # Profile selection
+        profile_frame = ttk.LabelFrame(toolpath_frame, text="Printer Profile")
+        profile_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(profile_frame, text="Printer Profile:").pack(anchor='w', padx=10, pady=5)
+        self.printer_profile_var = tk.StringVar(value="MXeneProfile_pet_25G")
+        profile_combo = ttk.Combobox(profile_frame, textvariable=self.printer_profile_var,
+                                   values=["MXeneProfile_pet_25G", "MXeneProfile_pet_30G", "MXeneProfile2_20"],
+                                   state="readonly")
+        profile_combo.pack(anchor='w', padx=10, pady=5)
+        
+        ttk.Label(profile_frame, text="Capacitor Profile:").pack(anchor='w', padx=10, pady=5)
+        self.capacitor_profile_var = tk.StringVar(value="stdCap")
+        cap_combo = ttk.Combobox(profile_frame, textvariable=self.capacitor_profile_var,
+                               values=["stdCap", "LargeCap", "smallCap"],
+                               state="readonly")
+        cap_combo.pack(anchor='w', padx=10, pady=5)
+        
+        # Toolpath generation
+        gen_frame = ttk.LabelFrame(toolpath_frame, text="Toolpath Generation")
+        gen_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Button(gen_frame, text="Generate Toolpath", command=self.generate_toolpath).pack(pady=5)
+        
+        # Toolpath info
+        info_frame = ttk.LabelFrame(toolpath_frame, text="Toolpath Information")
+        info_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        self.toolpath_info = ttk.Label(info_frame, text="No toolpath generated")
+        self.toolpath_info.pack(pady=5)
 
     def _create_settings_tab(self):
         """Create the settings tab"""
@@ -721,7 +531,6 @@ class CameraGUI:
     def capture_all(self):
         """Capture from all active cameras simultaneously"""
         self.global_status.config(text="Capturing from all cameras...", foreground="orange")
->>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
         self.capture_all_btn.config(state="disabled")
         
         # Run all captures in background
@@ -729,115 +538,6 @@ class CameraGUI:
 
     def _do_all_captures(self):
         """Background process to capture from all cameras"""
-<<<<<<< HEAD
-        try:
-            results = capture_all_cameras(self.save_folder, "capture")
-            
-            # Update individual camera statuses
-            for device_id, (success, result) in results.items():
-                if self.root.winfo_exists():
-                    if success:
-                        filename = os.path.basename(result)
-                        self.root.after(0, lambda did=device_id, fn=filename: 
-                                      self.status_labels[did].config(text=f"✓ Saved: {fn}", fg="green"))
-                    else:
-                        self.root.after(0, lambda did=device_id, err=result: 
-                                      self.status_labels[did].config(text=f"✗ Failed: {err}", fg="red"))
-            
-            # Update global status
-            if self.root.winfo_exists():
-                self.root.after(0, lambda: self.global_status.config(
-                    text="All captures completed", fg="green"
-                ))
-                self.root.after(0, lambda: self.capture_all_btn.config(state="normal"))
-                
-        except Exception as e:
-            print(f"[!] Capture all error: {e}")
-            if self.root.winfo_exists():
-                self.root.after(0, lambda: self.global_status.config(
-                    text="Capture error", fg="red"
-                ))
-                self.root.after(0, lambda: self.capture_all_btn.config(state="normal"))
-
-    def toggle_timelapse(self, device_id):
-        """Start or stop time-lapse for a camera"""
-        if is_timelapse_active(device_id):
-            self.stop_timelapse_for_device(device_id)
-        else:
-            self.start_timelapse_for_device(device_id)
-
-    def start_timelapse_for_device(self, device_id):
-        """Start time-lapse capture for a camera"""
-        controls = self.timelapse_controls[device_id]
-        
-        try:
-            interval = float(controls['interval_var'].get())
-            duration = float(controls['duration_var'].get())
-            
-            # Validate inputs
-            if interval <= 0 or duration <= 0:
-                messagebox.showerror("Error", "Interval and duration must be positive numbers")
-                return
-            
-            if interval > duration:
-                messagebox.showerror("Error", "Interval cannot be greater than duration")
-                return
-            
-            # Start the timelapse
-            if start_timelapse(device_id, interval, duration, self.save_folder):
-                # Update UI
-                controls['button'].config(text="⏹ Stop Time-lapse", bg='red')
-                controls['status'].config(text="Starting...", fg="orange")
-                
-                # Start status update thread
-                threading.Thread(target=self._monitor_timelapse, args=(device_id,), daemon=True).start()
-                
-                config = VIDEO_DEVICES[device_id]
-                print(f"[+] Time-lapse started for {config['name']}: {interval}s interval, {duration}s duration")
-            else:
-                messagebox.showerror("Error", f"Failed to start timelapse for {device_id}")
-                
-        except ValueError:
-            messagebox.showerror("Error", "Invalid interval or duration values")
-
-    def stop_timelapse_for_device(self, device_id):
-        """Stop time-lapse capture for a camera"""
-        if stop_timelapse(device_id):
-            controls = self.timelapse_controls[device_id]
-            controls['button'].config(text="🎬 Start Time-lapse", bg='purple')
-            controls['status'].config(text="Stopped", fg="red")
-            
-            config = VIDEO_DEVICES[device_id]
-            print(f"[+] Time-lapse stopped for {config['name']}")
-
-    def _monitor_timelapse(self, device_id):
-        """Monitor timelapse progress and update status"""
-        while is_timelapse_active(device_id):
-            if self.root.winfo_exists():
-                self.root.after(0, lambda: self.timelapse_controls[device_id]['status'].config(
-                    text="Running...", fg="blue"
-                ))
-            time.sleep(5)  # Update every 5 seconds
-        
-        # Timelapse completed
-        if self.root.winfo_exists():
-            controls = self.timelapse_controls[device_id]
-            self.root.after(0, lambda: controls['status'].config(text="Completed!", fg="green"))
-            self.root.after(0, lambda: controls['button'].config(text="🎬 Start Time-lapse", bg='purple'))
-
-    def update_loop(self):
-        """Main display update loop for preview frames"""
-        if not self.root.winfo_exists():
-            return
-        
-        # Update preview displays
-        for device_id in self.active_devices:
-            frame = get_preview_frame(device_id)
-            if frame is not None:
-                try:
-                    # Convert BGR to RGB and resize for display
-                    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-=======
         capture_threads = []
         
         # Start all captures
@@ -855,6 +555,69 @@ class CameraGUI:
             text="All captures completed", foreground="green"
         ))
         self.root.after(0, lambda: self.capture_all_btn.config(state="normal"))
+
+    def connect_printer(self):
+        """Connect to the printer"""
+        try:
+            self.printer_controller = KlipperController()
+            if self.printer_controller.connect():
+                self.printer_connected = True
+                self.printer_status_label.config(text="Connected", foreground="green")
+                messagebox.showinfo("Printer", "Printer connected successfully!")
+                self.update_position_display()
+            else:
+                messagebox.showerror("Error", "Failed to connect to printer")
+        except Exception as e:
+            messagebox.showerror("Error", f"Connection error: {e}")
+
+    def disconnect_printer(self):
+        """Disconnect from the printer"""
+        self.printer_connected = False
+        self.printer_controller = None
+        self.printer_status_label.config(text="Not Connected", foreground="red")
+        messagebox.showinfo("Printer", "Printer disconnected")
+
+    def home_axes(self, axes):
+        """Home specified axes"""
+        if not self.printer_connected:
+            messagebox.showerror("Error", "Please connect to printer first")
+            return
+        
+        def do_home():
+            try:
+                if self.printer_controller:
+                    success = self.printer_controller.home_axes(axes)
+                    if success:
+                        self.root.after(0, lambda: messagebox.showinfo("Success", f"Axes {axes} homed successfully"))
+                        self.update_position_display()
+                    else:
+                        self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to home axes {axes}"))
+                else:
+                    self.root.after(0, lambda: messagebox.showerror("Error", "Printer controller not available"))
+            except Exception as e:
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Homing error: {e}"))
+        
+        threading.Thread(target=do_home, daemon=True).start()
+
+    def update_position_display(self):
+        """Update the position display"""
+        if self.printer_connected and self.printer_controller:
+            try:
+                position = self.printer_controller.get_position()
+                if position:
+                    x, y, z, e = position
+                    self.position_label.config(text=f"Position: X:{x:.3f} Y:{y:.3f} Z:{z:.3f} E:{e:.3f}")
+            except Exception as e:
+                print(f"Error updating position: {e}")
+
+    def emergency_stop(self):
+        """Emergency stop the printer"""
+        if self.printer_connected and self.printer_controller:
+            try:
+                self.printer_controller.emergency_stop()
+                messagebox.showwarning("Emergency Stop", "Emergency stop activated!")
+            except Exception as e:
+                messagebox.showerror("Error", f"Emergency stop error: {e}")
 
     def toggle_timelapse(self):
         """Toggle timelapse on/off"""
@@ -942,17 +705,195 @@ class CameraGUI:
             self.root.after(0, lambda: self.timelapse_btn.config(text="▶️ Start Timelapse"))
             self.timelapse_active = False
 
+    def generate_toolpath(self):
+        """Generate toolpath based on selected profiles"""
+        try:
+            # Get selected profiles
+            printer_profile_name = self.printer_profile_var.get()
+            capacitor_profile_name = self.capacitor_profile_var.get()
+            
+            # Map profile names to actual objects
+            profile_map = {
+                "MXeneProfile_pet_25G": MXeneProfile_pet_25G,
+                "MXeneProfile_pet_30G": MXeneProfile_pet_30G,
+                "MXeneProfile2_20": MXeneProfile2_20
+            }
+            
+            cap_map = {
+                "stdCap": stdCap,
+                "LargeCap": LargeCap,
+                "smallCap": smallCap
+            }
+            
+            self.printer_profile = profile_map.get(printer_profile_name)
+            self.capacitor_profile = cap_map.get(capacitor_profile_name)
+            
+            if not self.printer_profile or not self.capacitor_profile:
+                messagebox.showerror("Error", "Invalid profile selection")
+                return
+            
+            # Generate toolpath
+            self.toolpath = generate_toolpath(prnt=self.printer_profile, cap=self.capacitor_profile)
+            
+            # Update toolpath info
+            info_text = f"Toolpath generated: {len(self.toolpath)} commands\n"
+            info_text += f"Printer Profile: {printer_profile_name}\n"
+            info_text += f"Capacitor Profile: {capacitor_profile_name}\n"
+            info_text += f"Extrusion Rate: {self.printer_profile.extrusion}\n"
+            info_text += f"Feed Rate: {self.printer_profile.feed_rate}"
+            
+            self.toolpath_info.config(text=info_text)
+            messagebox.showinfo("Success", f"Toolpath generated with {len(self.toolpath)} commands")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Toolpath generation failed: {e}")
+
     def begin_print_sequence(self):
-        """Begin the print sequence - this will be called from main.py"""
+        """Begin the print sequence"""
+        if not self.printer_connected:
+            messagebox.showerror("Error", "Please connect to printer first")
+            return
+        
+        if not self.toolpath:
+            messagebox.showerror("Error", "Please generate a toolpath first")
+            return
+        
         self.print_sequence_status.config(text="Print sequence initiated!", foreground="green")
+        
         # Set global variable to signal main.py to start the print sequence
         global print_sequence_started
         print_sequence_started = True
         print("Print sequence button clicked - starting print sequence...")
+        
+        # Start print sequence in background
+        threading.Thread(target=self._execute_print_sequence, daemon=True).start()
+
+    def _execute_print_sequence(self):
+        """Execute the print sequence in background"""
+        try:
+            # Create data folder
+            self.data_folder = self._create_data_directory()
+            
+            # Save toolpath
+            self._save_toolpath()
+            
+            # Initialize data collector
+            self.data_collector = DataCollector()
+            
+            # Execute toolpath
+            self._execute_toolpath()
+            
+            # Capture final images
+            self._capture_final_images()
+            
+            self.root.after(0, lambda: messagebox.showinfo("Success", "Print sequence completed successfully!"))
+            
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror("Error", f"Print sequence failed: {e}"))
+
+    def _create_data_directory(self):
+        """Create a timestamped directory within the data folder"""
+        data_folder = "data"
+        if not os.path.exists(data_folder):
+            os.makedirs(data_folder)
+        
+        timestamp = datetime.now().strftime("%m_%d_%H_%M_%S")
+        new_dir_path = os.path.join(data_folder, timestamp)
+        os.makedirs(new_dir_path, exist_ok=True)
+        
+        print(f"Created timestamped directory: {new_dir_path}")
+        return timestamp
+
+    def _save_toolpath(self):
+        """Save the toolpath as a G-code file"""
+        timestamp = datetime.now().strftime("%m_%d_%H_%M_%S")
+        filename = f"toolpath_{timestamp}.gcode"
+        if self.data_folder:
+            filepath = os.path.join("data", self.data_folder, filename)
+        else:
+            filepath = os.path.join("data", filename)
+        
+        try:
+            with open(filepath, 'w') as f:
+                f.write("; Toolpath generated by MXene printer\n")
+                f.write(f"; Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("; Format: G1 X<x> Y<y> Z<z> E<extrusion>\n\n")
+                
+                for i, point in enumerate(self.toolpath):
+                    x, y, z, e = point
+                    f.write(f"G1 X{x:.3f} Y{y:.3f} Z{z:.3f} E{e:.3f}\n")
+                
+                f.write("\n; End of toolpath\n")
+            
+            print(f"✓ Toolpath saved as G-code: {filepath}")
+            
+        except Exception as e:
+            print(f"✗ Error saving toolpath: {e}")
+
+    def _execute_toolpath(self):
+        """Execute the toolpath commands"""
+        if not self.printer_controller:
+            print("Error: Printer controller not available")
+            return
+            
+        for command in self.toolpath:
+            if "CAPTURE" in command:
+                self._handle_capture_command(command)
+            elif ";" not in command:
+                self.printer_controller.send_gcode(command)
+                time.sleep(0.01)
+
+    def _handle_capture_command(self, command):
+        """Handle CAPTURE commands in toolpath"""
+        try:
+            # Parse CAPTURE command: "CAPTURE, camera, x, y, z"
+            parts = [part.strip() for part in command.split(",")]
+            if len(parts) != 5:
+                print(f"✗ Invalid CAPTURE format: {command}")
+                return
+                
+            camera = int(parts[1])
+            x = float(parts[2])
+            y = float(parts[3])
+            z = float(parts[4])
+
+            print(f"Capturing image from camera {camera} at {x}, {y}, {z}")
+            
+            # Move printer to position
+            if self.printer_controller:
+                self.printer_controller.send_gcode(absolute()[0])
+                self.printer_controller.send_gcode(movePrintHead(0, 0, z, self.printer_profile)[0])
+                self.printer_controller.send_gcode(movePrintHead(x, y, 0, self.printer_profile)[0])
+            
+            # Capture image
+            timestamp = datetime.now().strftime("%H_%M_%S")
+            filename = f"camera{camera}_pos_{x}_{y}_{z}_{timestamp}.jpg"
+            
+            success, result = capture_image(camera_id=camera, filename=filename, method='fswebcam')
+            
+            if success:
+                print(f"✓ Capture completed: {result}")
+            else:
+                print(f"✗ Capture failed")
+            
+            time.sleep(1)
+            
+        except (ValueError, IndexError) as e:
+            print(f"✗ Error parsing CAPTURE command '{command}': {e}")
+
+    def _capture_final_images(self):
+        """Capture final images from all cameras"""
+        print("Capturing final images from all cameras...")
+        final_captures = capture_all_cameras(filename_prefix="final", method='fswebcam')
+        
+        for camera_id, (success, result) in final_captures.items():
+            if success:
+                print(f"✓ Final capture {camera_id}: {result}")
+            else:
+                print(f"✗ Final capture {camera_id} failed: {result}")
 
     def browse_folder(self):
         """Browse for data folder"""
-        from tkinter import filedialog
         folder = filedialog.askdirectory(title="Select Data Folder")
         if folder:
             self.folder_var.set(folder)
@@ -964,7 +905,6 @@ class CameraGUI:
                 try:
                     # Convert BGR to RGB and resize for display
                     img = cv2.cvtColor(stream.frame, cv2.COLOR_BGR2RGB)
->>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
                     img = cv2.resize(img, (320, 240))
                     
                     # Create PhotoImage and display
@@ -974,71 +914,12 @@ class CameraGUI:
                     label.configure(image=imgtk)
                     
                 except Exception as e:
-<<<<<<< HEAD
-                    # Silently handle display errors
-                    pass
-=======
                     print(f"[!] Display update error for {device_id}: {e}")
->>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
         
         # Schedule next update
         self.root.after(50, self.update_loop)
 
     def on_close(self):
-<<<<<<< HEAD
-        """Clean shutdown when window is closed"""
-        print("[*] Shutting down camera GUI...")
-        
-        # Stop all time-lapse operations
-        for device_id in self.active_devices:
-            if is_timelapse_active(device_id):
-                stop_timelapse(device_id)
-        
-        # Cleanup camera system
-        cleanup_all()
-        
-        # Small delay to ensure cleanup
-        time.sleep(0.1)
-        
-        # Destroy the window
-        self.root.destroy()
-
-def main():
-    """Main function to run the camera GUI"""
-    print("=== Multi-Camera Still Capture System ===")
-    
-    # Print camera configuration
-    for device_id, config in VIDEO_DEVICES.items():
-        print(f"  {config['name']}: {config['node']}")
-        print(f"    Capture: {config['capture_resolution'][0]}x{config['capture_resolution'][1]}")
-        print(f"    Focus: {'Manual' if config['focus_value'] else 'Auto'}")
-        print(f"    Rotation: {'180°' if config['rotate'] else 'None'}")
-    print()
-    
-    # Check dependencies
-    if not check_dependencies():
-        print("Please install missing dependencies and try again.")
-        return
-    
-    # Check camera availability
-    available_cameras = get_available_cameras()
-    if not available_cameras:
-        print("[!] No cameras available!")
-        print("Available video devices:")
-        os.system("ls -la /dev/video* 2>/dev/null || echo 'No video devices found'")
-        return
-    
-    print(f"[+] {len(available_cameras)} camera(s) ready")
-    print()
-    
-    # Start GUI
-    root = tk.Tk()
-    app = MultiCameraApp(root)
-    root.mainloop()
-
-if __name__ == "__main__":
-    main()
-=======
         """Clean shutdown"""
         print("[*] Shutting down...")
         if self.timelapse_active:
@@ -1051,9 +932,8 @@ if __name__ == "__main__":
 def main():
     """Main function to start the GUI"""
     root = tk.Tk()
-    app = CameraGUI(root)
+    app = PrinterGUI(root)
     root.mainloop()
 
 if __name__ == "__main__":
     main() 
->>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0

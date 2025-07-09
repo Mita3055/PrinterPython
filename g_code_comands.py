@@ -632,6 +632,15 @@ def straight_line(start_x, start_y, length, qty, spacing, prnt):
     output.extend(moveZ(10, prnt))
     return output
 
+<<<<<<< HEAD
+=======
+def capture_print(camera, x, y, z, prnt):
+    output = [""]
+    output.extend(f"CAPTURE,  {camera}, {x}, {y}, {z}")
+    return output
+
+
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
 def ZB2_test(start_x, start_y, length, qty, spacing, prnt):
     output = ["", "", ";3D ZB2 Test",
               f";\tstart_x : {start_x}",

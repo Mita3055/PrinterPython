@@ -30,7 +30,11 @@ class KlipperController:
         self.connected = False
         self.printer_state = "unknown"
         self.session = requests.Session()
+<<<<<<< HEAD
         self.session.headers.update({'User-Agent': 'SimplifiedKlipperController/1.0'})
+=======
+        self.session.headers.update({'User-Agent': 'Intergrated DIW Controller/1.8'})
+>>>>>>> a9be28b2acf9ed6e6f396b2cec409100c37576c0
         
         print(f"Initialized controller for {self.base_url}")
     
