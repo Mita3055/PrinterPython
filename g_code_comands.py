@@ -507,7 +507,7 @@ def lattice(start_x, start_y, rows, cols, spacing, prnt):
                 f";\tstart_y : {start_y}",
                 f";\thorizontal_lines : {cols}",
                 f";\tvertical_lines : {rows}",
-                f";\spacing : {spacing}"]
+                f";\tspacing : {spacing}"]
 
     output.extend(absolute())
     output.extend(movePrintHead(start_x, start_y-spacing, 5, prnt))
@@ -558,7 +558,7 @@ def lattice_3d(start_x, start_y, rows, cols, spacing, layers, layer_height, prnt
                 f";\tstart_y : {start_y}",
                 f";\thorizontal_lines : {cols}",
                 f";\tvertical_lines : {rows}",
-                f";\spacing : {spacing}",
+                f";\tspacing : {spacing}",
                 f";\tlayers : {layers}",
                 f";\tlayer_height : {layer_height}"]
 

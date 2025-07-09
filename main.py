@@ -11,13 +11,18 @@ import os
 from datetime import datetime
 from klipper_controller import KlipperController
 #from utills.loadcell import getLoad, initialize_loadcell
-from camera_integration import *
 from g_code_comands import *
 from data_collection import DataCollector
 import tkinter as tk
-from Camera_gui import CameraGUI
+from Camera_gui import MultiCameraApp
 from configs import *
 import threading
+
+from camera_integration import (
+    initialize_cameras, capture_image, capture_all_cameras,
+    start_timelapse, stop_timelapse, cleanup_all,
+    get_available_cameras, VIDEO_DEVICES
+)
 
 # Global variable for print sequence control
 print_sequence_started = False
@@ -140,11 +145,10 @@ def save_toolpath(toolpath, data_folder):
             print(f"✗ Error saving toolpath: {e}")
             return None
 
-            
-def capture_live_print(camera_id, x, y, z, file_path, file_name, time_lapse=False, time_lapse_interval=30, time_lapse_duration=1800):
-    """
-    Capture live print images with optional timelapse functionality
+ # change to time based capture           
+def capture_live_print(comand, klipper_ctrl, prnt , file_path):
 
+    """
     Args:
         camera_id: Camera ID to capture from
         x, y, z: Current position coordinates
@@ -154,44 +158,80 @@ def capture_live_print(camera_id, x, y, z, file_path, file_name, time_lapse=Fals
         time_lapse_interval: Seconds between captures in timelapse mode
         time_lapse_duration: Total duration for timelapse in seconds
     """
-    os.makedirs(file_path, exist_ok=True)
-    if not time_lapse:
-        # Single capture
-        filename = os.path.join(file_path, f"{file_name}.jpg")
-        try:
-            success, result = capture_image(camera_id=camera_id, filename=filename, method='fswebcam')
-            if success:
-                print(f"✓ Captured image: {result}")
-                return result
-            else:
-                print(f"✗ Capture failed: {result}")
-                return None
-        except Exception as e:
-            print(f"✗ Error capturing image: {e}")
-            return None
+ 
+
+    try:
+        parts = [part.strip() for part in comand.split(",")]
+        
+        camera = int(parts[1])
+        x = float(parts[2])
+        y = float(parts[3])
+        z = float(parts[4])
+        file_name = parts[5]
+
+
+    except (ValueError, IndexError) as e:
+        print(f"✗ Error parsing CAPTURE command '{comand}': {e}")
+        return None
+
+    if file_name is None:
+        file_name = f"capture_cam{camera}_x{x}_y{y}_z{z}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
     else:
-        # Timelapse capture
-        print(f"Starting timelapse: {time_lapse_duration}s duration, {time_lapse_interval}s intervals")
-        captured_files = []
-        start_time = time.time()
-        for i in range(0, time_lapse_duration, time_lapse_interval):
-            elapsed = time.time() - start_time
-            if elapsed >= time_lapse_duration:
-                break
-            frame_filename = os.path.join(file_path, f"{file_name}_frame_{i//time_lapse_interval:04d}.jpg")
-            try:
-                success, result = capture_image(camera_id=camera_id, filename=frame_filename, method='fswebcam')
-                if success:
-                    captured_files.append(result)
-                    print(f"✓ Frame {i//time_lapse_interval:04d}: {result}")
-                else:
-                    print(f"✗ Frame {i//time_lapse_interval:04d} failed: {result}")
-                if elapsed + time_lapse_interval < time_lapse_duration:
-                    time.sleep(time_lapse_interval)
-            except Exception as e:
-                print(f"✗ Error capturing frame {i//time_lapse_interval}: {e}")
-        print(f"✓ Timelapse complete: {len(captured_files)} frames captured")
-        return captured_files
+        file_name = f"{file_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+
+    time_lapse = parts[6]
+    
+    os.makedirs(file_path, exist_ok=True)
+
+    #Move to Capture Location
+    klipper_ctrl.send_gcode(absolute()[0])
+    klipper_ctrl.send_gcode(movePrintHead(0, 0, z, prnt)[0])
+    klipper_ctrl.send_gcode(movePrintHead(x, y, 0, prnt)[0])
+    
+    #Wait for Printer to be in Position
+    klipper_ctrl.wait_for_idle()
+    
+    print(f"Printer is ready to capture")
+
+    if camera == 1:
+        camera_id = "video0"
+    elif camera == 2:
+        camera_id = "video2"
+
+    if not time_lapse:
+        success, result = capture_image(camera_id, file_path, file_name)
+
+        if success:
+            print(f"✓ Image captured successfully: {result}")
+            return result
+        else:
+            print(f"✗ Image capture failed: {result}")
+            return None
+
+            
+    else:
+        timelapse_prefix = file_name.replace('.jpg', '').replace('.jpeg', '')
+        time_lapse_interval = int(parts[7])
+        time_lapse_duration = int(parts[8])
+        success = start_timelapse(
+            device_id=camera_id,
+            interval_seconds=time_lapse_interval,
+            duration_seconds=time_lapse_duration,
+            save_path=file_path,
+            filename_prefix=timelapse_prefix
+        )
+
+        if success:
+            print(f"✓ Timelapse started successfully")
+            print(f"   Duration: {time_lapse_duration}s")
+            print(f"   Interval: {time_lapse_interval}s")
+            print(f"   Expected frames: {time_lapse_duration // time_lapse_interval}")
+            return f"timelapse_started_{camera_id}_{timelapse_prefix}"
+        else:
+            print(f"✗ Failed to start timelapse")
+            return None
+
+        
 
 def main():
 
@@ -205,30 +245,14 @@ def main():
     # Create data folder and initialize camera system
     data_folder = data_directory()
 
-
-    initialize_camera_system(data_folder)
-    cameras = list_cameras()
-
-
-    print(f"Available cameras: {len(cameras)}")
-    for camera in cameras:
-        print(f"  - {camera['name']} ({camera['id']}) at {camera['node']}")
-    
-    # Configure camera focus settings
-    print("Configuring camera focus settings...")
-    camera_info = get_camera_info(1)  # Overhead Camera
-    if camera_info:
-        print(f"Overhead Camera: {camera_info['capture_resolution']} resolution")
-    
-    camera_info = get_camera_info(2)  # Side Camera  
-    if camera_info:
-        print(f"Side Camera: {camera_info['capture_resolution']} resolution")
-
+    initialize_cameras()
+    cameras = get_available_cameras()
+   
+    # Print available cameras and their info
     printer = MXeneProfile_pet_25G  # Example: using PET 25G profile
     capacitor_profile = stdCap  # Example: using standard capacitor
     printer.set_print_height(print_height=2.5, bed_height=2.5)
 
-    
     # Enable pressure-based extrusion if needed
     # printer_profile.constPressure(target_pressure=5.0)  # Uncomment and set target pressure
     
@@ -250,88 +274,27 @@ def main():
     print("Print sequence initiated by user!")
     
     for comand in toolpath:
-
-
         if "CAPTURE" in comand:
             try:
+                capture_live_print(
+                    comand=comand, 
+                    klipper_ctrl=klipper, 
+                    prnt=printer, 
+                    file_path=data_folder)
 
-                # "CAPTURE, camera, x, y, z"
-                parts = [part.strip() for part in comand.split(",")]
-                if len(parts) != 5:
-                    print(f"✗ Invalid CAPTURE format: {comand}")
-                    continue
-                    
-                camera = int(parts[1])
-                x = float(parts[2])
-                y = float(parts[3])
-                z = float(parts[4])
-                img_name = parts[5]
-                time_lapse = parts[6]
-                print(f"Capturing image from camera {camera} at {x}, {y}, {z}")
 
-                #Move to Capture Location
-                klipper.send_gcode(absolute()[0])
-                klipper.send_gcode(movePrintHead(0, 0, z, printer)[0])
-                klipper.send_gcode(movePrintHead(x, y, 0, printer)[0])
-                
-                #Wait for Printer to be in Position
-                ready_to_capture = False
-                while not ready_to_capture:
-                    time.sleep(0.1)
-
-                    current_position = klipper.get_position()
-                    if current_position is not None:
-                        target_position = (x, y, z, current_position[3])
-                        
-                        if current_position == target_position:
-                            ready_to_capture = True
-                            time.sleep(1)
-
-                    else:
-                        print("✗ Failed to get current position")
-                        break
-
-                if img_name is None:
-                    img_name = f"camera{camera}_pos_{x}_{y}_{z}_{datetime.now().strftime('%H_%M_%S')}"
-                if not time_lapse:
-
-                    result = capture_live_print(
-                        camera_id=camera,
-                        x=x, y=y, z=z,
-                        file_path=data_folder,  
-                        file_name=img_name,
-                        time_lapse=False)
-
-                else:
-                    time_lapse_interval = int(parts[7])
-                    time_lapse_duration = int(parts[8])
-
-                    result = capture_live_print(
-                        camera_id=camera,
-                        x=x, y=y, z=z,
-                        file_path=data_folder,  
-                        file_name=img_name,
-                        time_lapse=True,
-                        time_lapse_interval=time_lapse_interval,
-                        time_lapse_duration=time_lapse_duration)
-                
-
-                if result:
-                    print(f"✓ Capture completed: {result}")
-                else:
-                    print(f"✗ Capture failed")
-                
-                time.sleep(1)
-                
-            except (ValueError, IndexError) as e:
-                print(f"✗ Error parsing CAPTURE command '{comand}': {e}")
+            except Exception as e:
+                print(f"✗ Error CAPTURE not taken '{comand}': {e}")
                 continue
+            
 
         #"PASUE, delay"
         elif "PASUE" in comand:
 
             try:
-                delay = int(comand.split(",")[1])
+                parts = [part.strip() for part in comand.split(",")]
+                delay = int(parts[1])
+                klipper.wait_for_idle()
                 time.sleep(delay)
 
             except (ValueError, IndexError) as e:
@@ -347,7 +310,7 @@ def main():
     # Optional: Capture final images from all cameras
     print("Capturing final images from all cameras...")
     from camera_integration import capture_all_cameras
-    final_captures = capture_all_cameras(filename_prefix="final", method='fswebcam')
+    final_captures = capture_all_cameras(filename_prefix="final")
     
     for camera_id, (success, result) in final_captures.items():
         if success:

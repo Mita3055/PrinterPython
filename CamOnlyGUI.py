@@ -25,7 +25,7 @@ VIDEO_DEVICES = {
         'node': '/dev/video2',
         'capture_resolution': (1920, 1080),
         'preview_resolution': (640, 480),
-        'focus_value': None,  # Auto focus
+        'focus_value': None, 
         'rotate': False,
         'name': 'Camera_2'
     }

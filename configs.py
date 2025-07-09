@@ -1,3 +1,22 @@
+VIDEO_DEVICES = {
+    'video0': {
+        'node': '/dev/video0',
+        'capture_resolution': (8000, 6000),
+        'preview_resolution': (640, 480),
+        'focus_value': 120,  # Manual focus start value
+        'rotate': True,
+        'name': 'Camera_0'
+    },
+    'video2': {
+        'node': '/dev/video2',
+        'capture_resolution': (1920, 1080),
+        'preview_resolution': (640, 480),
+        'focus_value': None, 
+        'rotate': False,
+        'name': 'Camera_2'
+    }
+}
+
 class Capacitor:
     def __init__(self, stem_len=None, arm_len=None, arm_count=None, gap=None, arm_gap=None, contact_patch_width=None):
         self.stem_len = stem_len
