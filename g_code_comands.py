@@ -1,4 +1,7 @@
+from asyncio import new_event_loop
+from re import S
 from tkinter import LEFT
+from tracemalloc import start
 from configs import *
 import math
 
@@ -51,6 +54,14 @@ def pause(delay):
               ";Pausing for {delay} seconds",
               f"PASUE, {delay}",
               ""]
+    return output
+
+def send_message(message):
+    output = ["", "PRINT, " + message, ""]
+    return output
+
+def waitForInput():
+    output = ["","WAIT",""]
     return output
 
 
@@ -611,25 +622,55 @@ def lattice_3d(start_x, start_y, rows, cols, spacing, layers, layer_height, prnt
 
 # Stright Line Test
 
-def straight_line(start_x, start_y, length, qty, spacing, prnt):
-    output = ["", "", ";Straight Line Testing",
-              f";\tstart_x : {start_x}",
-              f";\tstart_y : {start_y}",
-              f";\tlength : {length}",
-              f";\tqty : {qty}"]
+def straight_line(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5):
+
+    output = []
+
+    output.extend(absolute())
+    output.extend(moveZ(15,prnt))
+    output.extend(movePrintHead(start_x, start_y-5, prnt.print_height+5,prnt))
+
+    for line in range(qty):
+        output.extend(relative())
+        output.extend(movePrintHead(0,5,-5,prnt))
+
+        output.extend(printY(length,prnt))
+        output.extend(movePrintHead(0,5,5,prnt))
+
+        output.extend(moveZ(10,prnt))
+        
+        if line != qty - 1:
+            output.extend(movePrintHead(spacing, -length,0,prnt))
+            output.extend(absolute())
+            output.extend(moveZ(prnt.print_height+5,prnt))
     
     output.extend(absolute())
-    output.extend(movePrintHead(start_x, start_y-5, 5+prnt.print_height, prnt))
-    output.extend(moveZ(prnt.print_height, prnt))
-    output.extend(relative())
-    for i in range(qty):
-        output.extend(movePrintHead(0, 5, -5, prnt))
-        output.extend(printY(length, prnt))
-        output.extend(movePrintHead(0, 5, 5, prnt))
-        output.extend(movePrintHead(spacing, -length-5, 0, prnt))
+    output.extend(moveZ(60,prnt))
+    output.extend(movePrintHead(70,15,60,prnt))
+    
+    return output
     
 
-    output.extend(moveZ(10, prnt))
+def fullTest(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5, sheerRates=None):
+    output = []
+    if sheerRates is None:
+        sheerRates = [0.1,0.2,0.5,1,2,5,10,20,50,100,200,500]
+   
+    def calcParamiters(rates):
+
+        return 0,0
+
+    for rate in sheerRates:
+        newe, newf = calcParamiters(rate)
+        prnt.extrusion = newe
+        prnt.feed_rate = newf
+
+        output.extend(straight_line(prnt))
+        output.extend(capture_print(1,start_x, 0, 60, f"staigt_line_rate{rate}"))
+        output.extend(send_message( "Please Clean Print Surface" ))
+        output.extend(send_message( "Ready to Continue" ))
+        output.extend(waitForInput())
+
     return output
 
 def ZB2_test(start_x, start_y, length, qty, spacing, prnt):

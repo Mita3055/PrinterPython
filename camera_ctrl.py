@@ -173,6 +173,10 @@ def capture_still_opencv(device_config: dict, app_instance=None, save_path=None)
             new_stream = VideoStream(VIDEO_DEVICES[device_id])
             new_stream.start()
 
+
+
+
+
 class VideoStream:
     def __init__(self, device_config):
         self.node = device_config['node']
