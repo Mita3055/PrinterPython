@@ -172,7 +172,7 @@ def capture_still_opencv(device_config: dict, app_instance=None, save_path=None)
             time.sleep(0.3)
             new_stream = VideoStream(VIDEO_DEVICES[device_id])
             new_stream.start()
-
+""
 
 
 
