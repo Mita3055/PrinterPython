@@ -132,9 +132,10 @@ def save_toolpath(toolpath, data_folder):
                 f.write("; Format: G1 X<x> Y<y> Z<z> E<extrusion>\n\n")
                 
                 # Write each toolpath point as G-code
-                for i, point in enumerate(toolpath):
-                    x, y, z, e = point
-                    f.write(f"G1 X{x:.3f} Y{y:.3f} Z{z:.3f} E{e:.3f}\n")
+                for cmd in (toolpath):
+                   f.write(cmd+"\n")
+
+
                 
                 f.write("\n; End of toolpath\n")
             
