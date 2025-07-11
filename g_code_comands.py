@@ -658,7 +658,7 @@ def fullTest(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5, sheerRat
    
     def calcParamiters(rates):
 
-        return 0,0
+        return prnt.extrussion,prnt.feed_rate
 
     for rate in sheerRates:
         newe, newf = calcParamiters(rate)
@@ -672,6 +672,24 @@ def fullTest(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5, sheerRat
         output.extend(waitForInput())
 
     return output
+
+def massFlowTest(prnt, Feedrates):
+    output = []
+    
+    if Feedrates is None:
+        Feedrates = [0.1,0.2,0.5,1,2,5,10,20,50,100,200,500]
+   
+   
+    def extrudeOnly(E,F):
+        return [f"G1 E{E} F{F}"]
+         
+    for rate in Feedrates:
+        E = 35
+        output.extend(extrudeOnly(E, rate))
+        output.extend(waitForInput())
+    
+    return output
+
 
 def ZB2_test(start_x, start_y, length, qty, spacing, prnt):
     output = ["", "", ";3D ZB2 Test",
