@@ -8,8 +8,9 @@ import threading
 """
 
 class DataCollector:
-    def __init__(self, filename="print_data.csv"):
-        self.filename = filename
+    def __init__(self, save_directory, filename="print_data.csv"):
+        self.save_directory = save_directory
+        self.filename = os.path.join(save_directory, filename)
         self._recording = False
         self._thread = None
         self._start_time = None
@@ -20,23 +21,37 @@ class DataCollector:
         with open(self.filename, mode='a', newline='') as csvfile:
             writer = csv.writer(csvfile)
             if not file_exists:
-                writer.writerow(['time_s', 'X', 'Y', 'Z', 'E', 'loadcell_kg'])
+                # Adjust header based on whether getLoad is provided
+                if getLoad is None:
+                    writer.writerow(['time_s', 'X', 'Y', 'Z', 'E'])
+                else:
+                    writer.writerow(['time_s', 'X', 'Y', 'Z', 'E', 'loadcell_kg'])
+                    
             while self._recording:
                 t = time.time() - self._start_time
                 pos = controller.get_position()  # Should return dict with keys X, Y, Z, E
-                load = getLoad()
-                writer.writerow([
-                    f"{t:.3f}",
-                    pos.get('X', 0),
-                    pos.get('Y', 0),
-                    pos.get('Z', 0),
-                    pos.get('E', 0),
-                    f"{load:.5f}"
-                ])
+                if getLoad is None:
+                    writer.writerow([
+                        f"{t:.3f}",
+                        pos.get('X', 0),
+                        pos.get('Y', 0),
+                        pos.get('Z', 0),
+                        pos.get('E', 0)
+                    ])
+                else:
+                    load = getLoad()
+                    writer.writerow([
+                        f"{t:.3f}",
+                        pos.get('X', 0),
+                        pos.get('Y', 0),
+                        pos.get('Z', 0),
+                        pos.get('E', 0),
+                        f"{load:.5f}"
+                    ])
                 csvfile.flush()
                 time.sleep(interval)
 
-    def record_print_data(self, controller, getLoad, interval=0.01):
+    def record_print_data(self, controller, getLoad=None, interval=0.01):
         if not self._recording:
             self._recording = True
             self._thread = threading.Thread(target=self._record_loop, args=(controller, getLoad, interval))

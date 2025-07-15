@@ -509,6 +509,50 @@ def contracting_square_wave(start_x, start_y, height, width, iterations, shrink_
     output.extend(moveZ(10, prnt))
     return output
 
+def layered_FFT(prnt, start_x=60, start_y = 50, height = 30 , width=5, iterations=12, shrink_rate = 0.9, layer_height = 0.5, layers=5):
+    initilZ = prnt.print_height
+    currentLayerHeight = 0
+
+    output = ["",
+                "",
+                ";Printing Layered FFT"]
+    
+    output.extend(absolute())
+    output.extend(moveZ(5, prnt))
+    output.extend(movePrintHead(start_x, start_y-10, 5+initilZ, prnt))
+
+    output.extend(relative())
+    output.extend(movePrintHead(0, 5, -5, prnt))
+    output.extend(printY(5, prnt))
+
+    for layer in range(layers):
+
+        for i in range(iterations):
+            output.extend(printY(height, prnt))
+            output.extend(printX(width, prnt))
+            height = height * shrink_rate
+            output.extend(printY(-height, prnt))
+            output.extend(printX(width, prnt))
+            height = height * shrink_rate
+
+        # Adjust layer Height
+        currentLayerHeight += layer_height
+        prnt.set_print_height(initilZ + currentLayerHeight)
+
+        # Capture Layer
+        output.extend(capture_print(1, start_x=65, start_y=10, z=currentLayerHeight+60, file_name=f"layered_FFT_layer_{layer}", time_lapse=False))
+
+        # Wait for user input
+        if layer != layers - 1:
+            output.extend(send_message("Continue to next layer"))
+            output.extend(waitForInput())
+
+    output.extend(moveZ(60, prnt))
+    output.extend(movePrintHead(65, 10, 60, prnt))
+
+
+    return output
+
 
 def lattice(start_x, start_y, rows, cols, spacing, prnt):
     output = ["",
@@ -533,7 +577,7 @@ def lattice(start_x, start_y, rows, cols, spacing, prnt):
         else:
             output.extend(printY(-spacing * cols, prnt))
         output.extend(printX(spacing, prnt))
-
+    # Horizontal Sections:
     if rows % 2 == 0:
         output.extend(printY(spacing * cols, prnt))
 
@@ -561,17 +605,20 @@ def lattice(start_x, start_y, rows, cols, spacing, prnt):
 
     return output
 
-def lattice_3d(start_x, start_y, rows, cols, spacing, layers, layer_height, prnt):
+def lattice_3d(prnt, start_x=60, start_y=50, rows=5, cols=5, spacing=3, layers=5, layer_height= 0.5):
+    
+    initialZ = prnt.print_height
+    currentLayerHeight = 0
+
     output = ["",
                 "",
-                ";Printing 3D Lattice/Grid",
+                ";Printing Lattice/Grid",
                 f";\tstart_x : {start_x}",
                 f";\tstart_y : {start_y}",
                 f";\thorizontal_lines : {cols}",
                 f";\tvertical_lines : {rows}",
-                f";\tspacing : {spacing}",
-                f";\tlayers : {layers}",
-                f";\tlayer_height : {layer_height}"]
+                f";\tspacing : {spacing}"]
+    # Moving to Start
 
     output.extend(absolute())
     output.extend(movePrintHead(start_x, start_y-spacing, 5, prnt))
@@ -579,16 +626,27 @@ def lattice_3d(start_x, start_y, rows, cols, spacing, layers, layer_height, prnt
     output.extend(relative())
 
     output.extend(printY(5,prnt))
-    
     for layer in range(layers):
-        # Vertical Sections:
+    # Vertical Sections:
         for i in range(rows):
             if i % 2 == 0:
                 output.extend(printY(spacing * cols, prnt))
             else:
                 output.extend(printY(-spacing * cols, prnt))
             output.extend(printX(spacing, prnt))
+        
+        # Adjust layer Height        
+        currentLayerHeight += layer_height
+        prnt.setPrintHeight(initialZ + currentLayerHeight)
 
+        # Capture Layer
+        output.extend(capture_print(1, x=65, y=10, z=currentLayerHeight+60, file_name=f"lattice_layer_{layer}_Vertical", time_lapse=False))
+
+        #Wait for user input
+        output.extend(send_message("Continue to next layer"))
+        output.extend(waitForInput())
+
+        # Horizontal Sections:
         if rows % 2 == 0:
             output.extend(printY(spacing * cols, prnt))
 
@@ -613,12 +671,26 @@ def lattice_3d(start_x, start_y, rows, cols, spacing, layers, layer_height, prnt
                     output.extend(printY(spacing, prnt))
 
             output.extend(printX(5+cols*spacing, prnt))
-        
-        # Move to next layer
-        if layer < layers - 1:
-            output.extend(moveZ(layer_height, prnt))
+     
+        # Adjust layer Height        
+        currentLayerHeight += layer_height
+        prnt.setPrintHeight(initialZ + currentLayerHeight)
+
+        # Capture Layer
+        output.extend(capture_print(1, start_x=65, start_y=10, z=currentLayerHeight+60, file_name= f"lattice_layer_{layer}_Horizontal", time_lapse=False))
+
+        #Wait for user input
+        if layer != layers-1:  # No need to wait after the last layer
+            output.extend(send_message("Continue to next layer"))
+            output.extend(waitForInput())
+
+    # Final Move
+    output.extend(absolute())
+    output.extend(moveZ(60, prnt))
+    output.extend(movePrintHead(65, 10, 60, prnt))
 
     return output
+
 
 # Stright Line Test
 
@@ -651,7 +723,7 @@ def straight_line(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5):
     return output
     
 
-def fullTest(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5, sheerRates=None):
+def straigtLineRoutine(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5, sheerRates=None):
     output = []
     if sheerRates is None:
         sheerRates = [0.1,0.2,0.5,1,2,5,10,20,50,100,200,500]
@@ -689,6 +761,8 @@ def massFlowTest(prnt, Feedrates):
         output.extend(waitForInput())
     
     return output
+
+
 
 
 def ZB2_test(start_x, start_y, length, qty, spacing, prnt):
