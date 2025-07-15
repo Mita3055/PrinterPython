@@ -540,7 +540,7 @@ def layered_FFT(prnt, start_x=60, start_y = 50, height = 30 , width=5, iteration
         prnt.set_print_height(initilZ + currentLayerHeight)
 
         # Capture Layer
-        output.extend(capture_print(1, start_x=65, start_y=10, z=currentLayerHeight+60, file_name=f"layered_FFT_layer_{layer}", time_lapse=False))
+        output.extend(capture_print(1, x=65, y=10, z=currentLayerHeight+60, file_name=f"layered_FFT_layer_{layer}", time_lapse=False))
 
         # Wait for user input
         if layer != layers - 1:
@@ -677,7 +677,7 @@ def lattice_3d(prnt, start_x=60, start_y=50, rows=5, cols=5, spacing=3, layers=5
         prnt.setPrintHeight(initialZ + currentLayerHeight)
 
         # Capture Layer
-        output.extend(capture_print(1, start_x=65, start_y=10, z=currentLayerHeight+60, file_name= f"lattice_layer_{layer}_Horizontal", time_lapse=False))
+        output.extend(capture_print(1, x=65, y=10, z=currentLayerHeight+60, file_name= f"lattice_layer_{layer}_Horizontal", time_lapse=False))
 
         #Wait for user input
         if layer != layers-1:  # No need to wait after the last layer

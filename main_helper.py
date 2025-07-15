@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 import time
 from g_code_comands import absolute, movePrintHead, moveZ
-from klipper_controller import KlipperController
+from klipper_controller import *
 
 
 from camera_integration import (
@@ -34,7 +34,7 @@ def data_directory():
     os.makedirs(new_dir_path, exist_ok=True)
     
     print(f"Created timestamped directory: {new_dir_path}")
-    return timestamp
+    return new_dir_path
 
 def save_toolpath(toolpath, data_folder):
         """
@@ -81,6 +81,7 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
         time_lapse_duration: Total duration for timelapse in seconds
     """
  
+    os.makedirs(file_path, exist_ok=True)
 
     try:
         parts = [part.strip() for part in comand.split(",")]
@@ -101,18 +102,20 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
     else:
         file_name = f"{file_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
 
-    time_lapse = parts[6]
+    if 'True' in parts[6]:
+        time_lapse = True
+    else:
+        time_lapse = False
     
-    os.makedirs(file_path, exist_ok=True)
-
     #Move to Capture Location
     klipper_ctrl.send_gcode(absolute()[0])
-    klipper_ctrl.send_gcode(moveZ(z, prnt)[0])
-    klipper_ctrl.send_gcode(movePrintHead(x, y, 0, prnt)[0])
+    klipper_ctrl.send_gcode(movePrintHead(0, 0, z, prnt)[0])
+    klipper_ctrl.send_gcode(movePrintHead(x, y, z, prnt)[0])
     
     #Wait for Printer to be in Position
+
     klipper_ctrl.wait_for_idle()
-    
+    klipper_ctrl.get_position()
     print(f"Printer is ready to capture")
 
     if camera == 1:
@@ -152,35 +155,53 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
         else:
             print(f"✗ Failed to start timelapse")
             return None
+
+
+def execute_toolpath(klipper_ctrl, printer, toolpath, data_folder):
+    try:
+        for comand in toolpath:
+            
+            if "CAPTURE" in comand:
+
+                capture_live_print(
+                        comand=comand, 
+                        klipper_ctrl=klipper_ctrl, 
+                        prnt=printer, 
+                        file_path=data_folder)
+
+            elif "PASUE" in comand:
+
+                try:
+                    parts = [part.strip() for part in comand.split(",")]
+                    delay = int(parts[1])
+                    klipper_ctrl.wait_for_idle()
+                    klipper_ctrl.get_printer_state()
+
+                    time.sleep(delay)
+
+                except (ValueError, IndexError) as e:
+                    print(f"✗ Error parsing PASUE command '{comand}': {e}")
+                    continue
+
+            elif "WAIT" in comand:
+                
+                print("Waiting for user input to continue with print sequence\n")
+                input("Hit Enter to Continue:\n")
+
+            elif "Print" in comand:
+
+                parts = [part.strip() for part in comand.split(",")]
+                message = parts[1]
+                print(f"Message in ToolPath: {message}")
+
+            elif comand.strip() and not comand.strip().startswith(";"):
+                
+                klipper_ctrl.send_gcode(comand)
+                klipper_ctrl.get_printer_state()
+                time.sleep(0.01)  
+        return True
         
-def execute_toolpath(toolpath, klipper):
-    """
-    Execute the toolpath commands on the Klipper controller.
-    """
-    for command in toolpath:
-        if "CAPTURE" in command:
-            try:
-                capture_live_print(command, klipper)
-            except Exception as e:
-                print(f"✗ Error capturing image: {e}")
-                continue
-        elif "PASUE" in command:
-            try:
-                parts = [part.strip() for part in command.split(",")]
-                delay = int(parts[1])
-                klipper.wait_for_idle()
-                time.sleep(delay)
-            except (ValueError, IndexError) as e:
-                print(f"✗ Error parsing PASUE command '{command}': {e}")
-                continue
-        elif "WAIT" in command:
-            print("Waiting for printer to be idle...")
-            klipper.wait_for_idle()
-            time.sleep(1)
-            input("Press Enter to continue...\n")
-        elif "PRINT" in command:
-            parts = [part.strip() for part in command.split(",")]
-            print(f"Message: {parts[1]}")
-        elif command.strip() and not command.strip().startswith(";"):
-            klipper.send_gcode(command)
-            time.sleep(0.01)
+    except (ValueError, IndexError) as e:
+
+        print(f"✗ Print Sequence Failed: {e}")
+        return False

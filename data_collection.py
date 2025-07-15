@@ -15,7 +15,7 @@ class DataCollector:
         self._thread = None
         self._start_time = None
 
-    def _record_loop(self, controller, getLoad, interval=0.01):
+    def _record_loop(self, controller, getLoad=None, interval=0.01):
         self._start_time = time.time()
         file_exists = os.path.isfile(self.filename)
         with open(self.filename, mode='a', newline='') as csvfile:
@@ -65,7 +65,7 @@ class DataCollector:
 
 # Usage in main.py:
 # from data_collection import DataCollector
-# data_collector = DataCollector()
+# data_collector = DataCollector(save_directory=data_folder)
 # data_collector.record_print_data(controller, getLoad)
 # ... do stuff ...
 # data_collector.stop_record_data()
