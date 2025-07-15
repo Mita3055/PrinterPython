@@ -66,10 +66,10 @@ def waitForInput():
 
 
 def capture_print(camera, x, y, z, file_name=None, time_lapse=False, time_lapse_interval=30, time_lapse_duration=1800):
-    if not time_lapse:
+    if time_lapse is None or time_lapse == False:
             output = ["",
               ";Capturing Immage",
-              f"CAPTURE,  {camera}, {x}, {y}, {z}, {file_name}",
+              f"CAPTURE,  {camera}, {x}, {y}, {z}, {file_name}, {time_lapse}",
               ""]
     else:
         output = ["",

@@ -81,14 +81,14 @@ def generate_toolpath(prnt, cap):
 
     # Spape Fidelity Test
     toolpath.extend(lattice(start_x=10, start_y=40, rows=5, cols=5, spacing=3, prnt=prnt))
-    toolpath.extend(capture_print(camera=1, x=17.5, y=0, z=60, ))
+    toolpath.extend(capture_print(camera=1, x=17.5, y=0, z=60, file_name="lattice_test", time_lapse=False))
     toolpath.extend(contracting_square_wave(start_x=40, start_y=40, height=40, width=5, iterations=5, shrink_rate=0.95, prnt=prnt))
-    toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, file_name="contracting_square_wave"))
+    toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, file_name="contracting_square_wave", time_lapse=False))
 
 
     # Striaght Line Test
-    toolpath.extend(straight_line(40, 90, 40, 5, 5, prnt))
-    toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, file_name="straight_line", time_lapse=True, time_lapse_interval=30, time_lapse_duration=1800))
+    #toolpath.extend(straight_line(40, 90, 40, 5, 5, prnt))
+    #toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, file_name="straight_line", time_lapse=True, time_lapse_interval=30, time_lapse_duration=1800))
     return toolpath
 
 def data_directory():
@@ -113,7 +113,7 @@ def data_directory():
     os.makedirs(new_dir_path, exist_ok=True)
     
     print(f"Created timestamped directory: {new_dir_path}")
-    return timestamp
+    return new_dir_path
 
 def save_toolpath(toolpath, data_folder):
         """
@@ -180,18 +180,22 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
     else:
         file_name = f"{file_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
 
-    time_lapse = parts[6]
+    if 'True' in parts[6]:
+        time_lapse = True
+    else:
+        time_lapse = False
     
     os.makedirs(file_path, exist_ok=True)
 
     #Move to Capture Location
     klipper_ctrl.send_gcode(absolute()[0])
     klipper_ctrl.send_gcode(movePrintHead(0, 0, z, prnt)[0])
-    klipper_ctrl.send_gcode(movePrintHead(x, y, 0, prnt)[0])
+    klipper_ctrl.send_gcode(movePrintHead(x, y, z, prnt)[0])
     
     #Wait for Printer to be in Position
+
     klipper_ctrl.wait_for_idle()
-    
+    klipper_ctrl.get_position()
     print(f"Printer is ready to capture")
 
     if camera == 1:
@@ -239,7 +243,9 @@ def main():
     # Initialize controller (localhost since running on Pi)
     klipper = KlipperController()
     klipper.connect()
-    
+    klipper.home_axes()
+    klipper.get_position()
+
     # Initialize loadcell
     #initialize_loadcell()
     
@@ -276,17 +282,17 @@ def main():
     
     for comand in toolpath:
         if "CAPTURE" in comand:
-            try:
-                capture_live_print(
+            #try:
+            capture_live_print(
                     comand=comand, 
                     klipper_ctrl=klipper, 
                     prnt=printer, 
                     file_path=data_folder)
 
 
-            except Exception as e:
-                print(f"✗ Error CAPTURE not taken '{comand}': {e}")
-                continue
+           # except Exception as e:
+            #    print(f"✗ Error CAPTURE not taken '{comand}': {e}")
+             #   continue
             
 
         #"PASUE, delay"
@@ -304,6 +310,7 @@ def main():
 
         elif comand.strip() and not comand.strip().startswith(";"):
             klipper.send_gcode(comand)
+            klipper.get_printer_state()
             time.sleep(0.01)
 
     #data_collector.stop_record_data()

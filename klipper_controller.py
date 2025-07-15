@@ -22,7 +22,7 @@ class PrinterConnectionError(Exception):
 class KlipperController:
     """Simplified and robust Klipper controller with enhanced diagnostics"""
     
-    def __init__(self, host="localhost", port=7125, timeout=10):
+    def __init__(self, host="localhost", port=7125, timeout=30):
         self.host = host
         self.port = port
         self.timeout = timeout
@@ -277,6 +277,7 @@ class KlipperController:
             position = result.get('toolhead', {}).get('position', [])
             
             if len(position) >= 4:
+                print(f"📍 Current Position: X:{position[0]:.3f} Y:{position[1]:.3f} Z:{position[2]:.3f} E:{position[3]:.3f}")
                 return tuple(position[:4])
                 
         except Exception as e:
@@ -325,6 +326,7 @@ class KlipperController:
             response.raise_for_status()
             
             result = response.json().get('result', {}).get('status', {})
+            print(f"📊 Printer State: {result.get('print_stats', {}).get('state', 'unknown')}")
             return result.get('print_stats', {}).get('state', 'unknown')
             
         except Exception:
