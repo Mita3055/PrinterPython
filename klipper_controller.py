@@ -277,7 +277,7 @@ class KlipperController:
             position = result.get('toolhead', {}).get('position', [])
             
             if len(position) >= 4:
-                print(f"📍 Current Position: X:{position[0]:.3f} Y:{position[1]:.3f} Z:{position[2]:.3f} E:{position[3]:.3f}")
+                #print(f"📍 Current Position: X:{position[0]:.3f} Y:{position[1]:.3f} Z:{position[2]:.3f} E:{position[3]:.3f}")
                 return tuple(position[:4])
                 
         except Exception as e:

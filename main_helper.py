@@ -115,6 +115,7 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
     #Wait for Printer to be in Position
 
     klipper_ctrl.wait_for_idle()
+    print(f"Printer is in position: X={x}, Y={y}, Z={z}")
     klipper_ctrl.get_position()
     print(f"Printer is ready to capture")
 
@@ -188,7 +189,7 @@ def execute_toolpath(klipper_ctrl, printer, toolpath, data_folder):
                 print("Waiting for user input to continue with print sequence\n")
                 input("Hit Enter to Continue:\n")
 
-            elif "Print" in comand:
+            elif comand.startswith("PRINT_MESSAGE"):
 
                 parts = [part.strip() for part in comand.split(",")]
                 message = parts[1]
@@ -202,6 +203,5 @@ def execute_toolpath(klipper_ctrl, printer, toolpath, data_folder):
         return True
         
     except (ValueError, IndexError) as e:
-
         print(f"✗ Print Sequence Failed: {e}")
         return False

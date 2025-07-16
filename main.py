@@ -79,7 +79,8 @@ def generate_toolpath(prnt, cap):
     toolpath.extend(lattice(start_x=10, start_y=40, rows=5, cols=5, spacing=3, prnt=prnt))
     toolpath.extend(waitForInput())
     toolpath.extend(capture_print(camera=1, x=17.5, y=0, z=60, file_name="lattice_test", time_lapse=False))
-    
+    toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=10, prnt=prnt))
+
 
     # Striaght Line Test
     #toolpath.extend(straight_line(40, 90, 40, 5, 5, prnt))
@@ -93,6 +94,8 @@ def main():
     klipper.connect()
     klipper.home_axes()
     klipper.get_position()
+
+
 
     # Initialize loadcell
     #initialize_loadcell()
@@ -123,14 +126,17 @@ def main():
     save_toolpath(toolpath, data_folder)
 
     data_collector = DataCollector(data_folder)
-    data_collector.record_print_data(printer, None)
+
 
     input("To Begin Print Sequence Hit Enter:")
     print("Print sequence initiated by user!")
     
+    
+    #data_collector.record_print_data(klipper, None)
+    
     execute_toolpath(klipper_ctrl=klipper, printer=printer, toolpath=toolpath, data_folder=data_folder)
 
-    data_collector.stop_record_data()
+    #data_collector.stop_record_data()
     
     # Optional: Capture final images from all cameras
 

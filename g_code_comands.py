@@ -57,7 +57,7 @@ def pause(delay):
     return output
 
 def send_message(message):
-    output = ["", "PRINT, " + message, ""]
+    output = ["", "PRINT_MESSAGE", f"{message}", ""]
     return output
 
 def waitForInput():
