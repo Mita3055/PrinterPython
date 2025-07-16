@@ -53,9 +53,12 @@ class Printer:
         self.target_pressure = target_pressure
         print(f"Pressure-based extrusion enabled. Target pressure: {target_pressure} N")
 
-    def set_print_height(self, print_height, bed_height):
+    def set_print_height(self, print_height, bed_height= None):
+
         self.print_height = print_height
-        self.bed_height = bed_height
+        # If bed_height is not provided, use the default value
+        if bed_height is not None:
+            self.bed_height = bed_height
 
 # Capacitor Profiles
 LargeCap = Capacitor(

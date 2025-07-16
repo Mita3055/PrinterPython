@@ -322,6 +322,8 @@ class KlipperController:
             url = f"{self.base_url}/printer/objects/query"
             params = {"print_stats": "state"}
             
+
+            
             response = self.session.get(url, params=params, timeout=self.timeout)
             response.raise_for_status()
             
@@ -479,6 +481,14 @@ if __name__ == "__main__":
             # Example usage
             controller.print_status()
             
+            # Fetch all available parameters for diagnostics
+            response_all_params = controller.session.get(f"{controller.base_url}/printer/objects/query", timeout=controller.timeout)
+            if response_all_params.status_code == 200:
+                all_params = response_all_params.json().get('result', {}).get('status', {})
+                print("\n📊 Available Parameters:")
+                for key, value in all_params.items():
+                    print(f"  {key}: {value}")
+
             # Uncomment these lines to test movement:
             controller.home_axes("XYZ")
             controller.move_to(x=50, y=50, z=10)

@@ -12,7 +12,7 @@ from camera_integration import (
 )
 
 
-def data_directory():
+def data_directory(folder_name=None):
     """
     Create a timestamped directory within the data folder.
     Returns the folder name in format MonthMM_DD_HH_MM_SS
@@ -28,8 +28,10 @@ def data_directory():
     timestamp = datetime.now().strftime("%m_%d_%H_%M_%S")
     
     # Create the full path for the new directory
-    new_dir_path = os.path.join(data_folder, timestamp)
-    
+    if folder_name is None:
+        new_dir_path = os.path.join(data_folder, timestamp)
+    else:
+        new_dir_path = os.path.join(data_folder, f"{folder_name}_{timestamp}")
     # Create the directory
     os.makedirs(new_dir_path, exist_ok=True)
     
@@ -108,6 +110,8 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
         time_lapse = False
     
     #Move to Capture Location
+
+
     klipper_ctrl.send_gcode(absolute()[0])
     klipper_ctrl.send_gcode(movePrintHead(0, 0, z, prnt)[0])
     klipper_ctrl.send_gcode(movePrintHead(x, y, z, prnt)[0])
@@ -119,6 +123,8 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
     klipper_ctrl.get_position()
     print(f"Printer is ready to capture")
 
+    input("Hit Enter When Printer Arrives at capture location:\n")
+
     if camera == 1:
         camera_id = "video0"
     elif camera == 2:
@@ -129,6 +135,7 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
 
         if success:
             print(f"✓ Image captured successfully: {result}")
+
             return result
         else:
             print(f"✗ Image capture failed: {result}")
@@ -164,11 +171,20 @@ def execute_toolpath(klipper_ctrl, printer, toolpath, data_folder):
             
             if "CAPTURE" in comand:
 
+                pos = klipper_ctrl.get_position() # = Tuple (x, Y, Z, E)
+                
+                pos_x = pos[1]
+                pos_y = pos[2]
+                pos_z = pos[3]
+
                 capture_live_print(
                         comand=comand, 
                         klipper_ctrl=klipper_ctrl, 
                         prnt=printer, 
                         file_path=data_folder)
+                
+
+                klipper_ctrl.send_gcode(movePrintHead(pos_x, pos_y, pos_z, printer)[0])
 
             elif "PASUE" in comand:
 

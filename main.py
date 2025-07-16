@@ -70,16 +70,16 @@ def generate_toolpath(prnt, cap):
 
     toolpath.extend(home())
     toolpath.extend(printPrimeLine(xStart=5, yStart=10, len=10, prnt=prnt))
-    toolpath.extend(printPrimeLine(xStart=10, yStart=10, len=10, prnt=prnt))
-    toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=10, prnt=prnt))
+    toolpath.extend(printPrimeLine(xStart=10, yStart=10, len=20, prnt=prnt))
+    toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=40, prnt=prnt))
     # Tool Path Generation
     toolpath = []
 
     # Spape Fidelity Test
-    toolpath.extend(lattice(start_x=10, start_y=40, rows=5, cols=5, spacing=3, prnt=prnt))
+    toolpath.extend(send_message("To Begin Shape Fidelity Test Hit Enter:"))
     toolpath.extend(waitForInput())
-    toolpath.extend(capture_print(camera=1, x=17.5, y=0, z=60, file_name="lattice_test", time_lapse=False))
-    toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=10, prnt=prnt))
+    print("Shape Fidelity Test initiated by user!")
+    #toolpath.extend(lattice_3d(prnt))
 
 
     # Striaght Line Test
@@ -93,6 +93,7 @@ def main():
     klipper = KlipperController()
     klipper.connect()
     klipper.home_axes()
+
     klipper.get_position()
 
 
@@ -107,9 +108,9 @@ def main():
     cameras = get_available_cameras()
    
     # Print available cameras and their info
-    printer = MXeneProfile_pet_25G  # Example: using PET 25G profile
+    printer = MXeneProfile_3pNanoParticles_22G  # Example: using PET 25G profile
     capacitor_profile = stdCap  # Example: using standard capacitor
-    printer.set_print_height(print_height=2.5, bed_height=2.5)
+    printer.set_print_height(print_height=2.4, bed_height=2.4)
 
     # Enable pressure-based extrusion if needed
     # printer_profile.constPressure(target_pressure=5.0)  # Uncomment and set target pressure
@@ -119,8 +120,10 @@ def main():
     print(f"Extrusion rate: {printer.extrusion}")
     print(f"Feed rate: {printer.feed_rate}")
     print(f"Print height: {printer.print_height}")
-    
-    data_folder = data_directory()
+
+    print("\n \n Enter Folder Name for Print Data:")
+    folder_name = input("Folder Name: ").strip()
+    data_folder = data_directory(folder_name=folder_name)
 
     toolpath = generate_toolpath(prnt=printer, cap=capacitor_profile)
     save_toolpath(toolpath, data_folder)
@@ -134,6 +137,7 @@ def main():
     
     #data_collector.record_print_data(klipper, None)
     
+
     execute_toolpath(klipper_ctrl=klipper, printer=printer, toolpath=toolpath, data_folder=data_folder)
 
     #data_collector.stop_record_data()

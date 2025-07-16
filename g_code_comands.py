@@ -57,7 +57,7 @@ def pause(delay):
     return output
 
 def send_message(message):
-    output = ["", "PRINT_MESSAGE", f"{message}", ""]
+    output = ["", f"PRINT_MESSAGE, {message}", ""]
     return output
 
 def waitForInput():
@@ -637,7 +637,7 @@ def lattice_3d(prnt, start_x=60, start_y=50, rows=5, cols=5, spacing=3, layers=5
         
         # Adjust layer Height        
         currentLayerHeight += layer_height
-        prnt.setPrintHeight(initialZ + currentLayerHeight)
+        prnt.set_print_height(initialZ + currentLayerHeight)
 
         # Capture Layer
         output.extend(capture_print(1, x=65, y=10, z=currentLayerHeight+60, file_name=f"lattice_layer_{layer}_Vertical", time_lapse=False))
@@ -647,6 +647,7 @@ def lattice_3d(prnt, start_x=60, start_y=50, rows=5, cols=5, spacing=3, layers=5
         output.extend(waitForInput())
 
         # Horizontal Sections:
+        output.extend(relative())
         if rows % 2 == 0:
             output.extend(printY(spacing * cols, prnt))
 
@@ -674,7 +675,7 @@ def lattice_3d(prnt, start_x=60, start_y=50, rows=5, cols=5, spacing=3, layers=5
      
         # Adjust layer Height        
         currentLayerHeight += layer_height
-        prnt.setPrintHeight(initialZ + currentLayerHeight)
+        prnt.set_print_height(initialZ + currentLayerHeight)
 
         # Capture Layer
         output.extend(capture_print(1, x=65, y=10, z=currentLayerHeight+60, file_name= f"lattice_layer_{layer}_Horizontal", time_lapse=False))
