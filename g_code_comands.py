@@ -509,7 +509,7 @@ def contracting_square_wave(start_x, start_y, height, width, iterations, shrink_
     output.extend(moveZ(10, prnt))
     return output
 
-def layered_FFT(prnt, start_x=60, start_y = 50, height = 30 , width=5, iterations=12, shrink_rate = 0.9, layer_height = 0.5, layers=5):
+def layered_FFT(prnt, start_x=60, start_y = 50, height = 30 , width=10, iterations=12, shrink_rate = 0.85, layer_height = 0.1, layers=5):
     initilZ = prnt.print_height
     currentLayerHeight = 0
 
@@ -540,7 +540,7 @@ def layered_FFT(prnt, start_x=60, start_y = 50, height = 30 , width=5, iteration
         prnt.set_print_height(initilZ + currentLayerHeight)
 
         # Capture Layer
-        output.extend(capture_print(1, x=65, y=10, z=currentLayerHeight+60, file_name=f"layered_FFT_layer_{layer}", time_lapse=False))
+        output.extend(capture_print(1, x=70, y=10, z=currentLayerHeight+60, file_name=f"layered_FFT_layer_{layer}", time_lapse=False))
 
         # Wait for user input
         if layer != layers - 1:
@@ -620,14 +620,16 @@ def lattice_3d(prnt, start_x=60, start_y=50, rows=5, cols=5, spacing=3, layers=5
                 f";\tspacing : {spacing}"]
     # Moving to Start
 
-    output.extend(absolute())
-    output.extend(movePrintHead(start_x, start_y-spacing, 5, prnt))
-    output.extend(moveZ(prnt.print_height, prnt))
-    output.extend(relative())
-
-    output.extend(printY(5,prnt))
     for layer in range(layers):
     # Vertical Sections:
+        output.extend(printPrimeLine(20, 10, 30, prnt))
+        output.extend(absolute())
+        output.extend(movePrintHead(start_x, start_y-spacing, 5, prnt))
+        output.extend(moveZ(prnt.print_height, prnt))
+        output.extend(relative())
+
+        output.extend(printY(5,prnt))
+
         for i in range(rows):
             if i % 2 == 0:
                 output.extend(printY(spacing * cols, prnt))
@@ -640,11 +642,11 @@ def lattice_3d(prnt, start_x=60, start_y=50, rows=5, cols=5, spacing=3, layers=5
         prnt.set_print_height(initialZ + currentLayerHeight)
 
         # Capture Layer
-        output.extend(capture_print(1, x=65, y=10, z=currentLayerHeight+60, file_name=f"lattice_layer_{layer}_Vertical", time_lapse=False))
+        #output.extend(capture_print(1, x=65, y=10, z=currentLayerHeight+60, file_name=f"lattice_layer_{layer}_Vertical", time_lapse=False))
 
         #Wait for user input
-        output.extend(send_message("Continue to next layer"))
-        output.extend(waitForInput())
+        #output.extend(send_message("Continue to next layer"))
+        #output.extend(waitForInput())
 
         # Horizontal Sections:
         output.extend(relative())
@@ -700,7 +702,7 @@ def straight_line(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5):
     output = []
 
     output.extend(absolute())
-    output.extend(moveZ(15,prnt))
+    output.extend(moveZ(prnt.print_height+5,prnt))
     output.extend(movePrintHead(start_x, start_y-5, prnt.print_height+5,prnt))
 
     for line in range(qty):
@@ -708,18 +710,19 @@ def straight_line(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5):
         output.extend(movePrintHead(0,5,-5,prnt))
 
         output.extend(printY(length,prnt))
+
         output.extend(movePrintHead(0,5,5,prnt))
 
         output.extend(moveZ(10,prnt))
         
         if line != qty - 1:
-            output.extend(movePrintHead(spacing, -length,0,prnt))
+            output.extend(movePrintHead(spacing, -length-10,0,prnt))
             output.extend(absolute())
             output.extend(moveZ(prnt.print_height+5,prnt))
     
     output.extend(absolute())
     output.extend(moveZ(60,prnt))
-    output.extend(movePrintHead(70,15,60,prnt))
+    output.extend(capture_print(1, 90, 10, 60, file_name="straight_line_test", time_lapse=False))
     
     return output
     

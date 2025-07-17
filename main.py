@@ -68,23 +68,26 @@ data:
 def generate_toolpath(prnt, cap):
     toolpath = []
 
-    toolpath.extend(home())
     toolpath.extend(printPrimeLine(xStart=5, yStart=10, len=10, prnt=prnt))
     toolpath.extend(printPrimeLine(xStart=10, yStart=10, len=20, prnt=prnt))
     toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=40, prnt=prnt))
+    toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=40, prnt=prnt))
+    toolpath.extend(moveZ(10, prnt))
     # Tool Path Generation
-    toolpath = []
 
     # Spape Fidelity Test
     toolpath.extend(send_message("To Begin Shape Fidelity Test Hit Enter:"))
     toolpath.extend(waitForInput())
     print("Shape Fidelity Test initiated by user!")
-    #toolpath.extend(lattice_3d(prnt))
+
+    #toolpath.extend(lattice_3d(prnt=prnt, layer_height=0.05))
+
+    #toolpath.extend(straight_line(prnt=prnt))
 
 
-    # Striaght Line Test
-    #toolpath.extend(straight_line(40, 90, 40, 5, 5, prnt))
-    #toolpath.extend(capture_print(camera=1, x=7.5, y=17.5, z=0, file_name="straight_line", time_lapse=True, time_lapse_interval=30, time_lapse_duration=1800))
+    #toolpath.extend(contracting_square_wave(start_x=60, start_y=50, height=30, width=10, iterations=10, shrink_rate=0.85, prnt=prnt))
+    toolpath.extend(capture_print(camera=1, x=90, y=10, z=60, file_name=f"FFT", time_lapse=False))
+    
     return toolpath
 
 def main():
@@ -92,7 +95,9 @@ def main():
     # Initialize controller (localhost since running on Pi)
     klipper = KlipperController()
     klipper.connect()
-    klipper.home_axes()
+
+    if klipper.get_homed_axes() != ['xyz']:
+        klipper.home_axes()
 
     klipper.get_position()
 
@@ -108,9 +113,13 @@ def main():
     cameras = get_available_cameras()
    
     # Print available cameras and their info
-    printer = MXeneProfile_3pNanoParticles_22G  # Example: using PET 25G profile
+    printer = MXeneProfile_3pNanoParticles_22G  # Example: using PET 25G profile#
+    
+    printer.feed_rate = printer.feed_rate - 100
     capacitor_profile = stdCap  # Example: using standard capacitor
-    printer.set_print_height(print_height=2.4, bed_height=2.4)
+
+    printer.set_print_height(print_height=1.7, bed_height=1.7)
+
 
     # Enable pressure-based extrusion if needed
     # printer_profile.constPressure(target_pressure=5.0)  # Uncomment and set target pressure

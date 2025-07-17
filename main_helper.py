@@ -113,7 +113,7 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
 
 
     klipper_ctrl.send_gcode(absolute()[0])
-    klipper_ctrl.send_gcode(movePrintHead(0, 0, z, prnt)[0])
+    klipper_ctrl.send_gcode(moveZ(z, prnt)[0])
     klipper_ctrl.send_gcode(movePrintHead(x, y, z, prnt)[0])
     
     #Wait for Printer to be in Position
@@ -173,9 +173,9 @@ def execute_toolpath(klipper_ctrl, printer, toolpath, data_folder):
 
                 pos = klipper_ctrl.get_position() # = Tuple (x, Y, Z, E)
                 
-                pos_x = pos[1]
-                pos_y = pos[2]
-                pos_z = pos[3]
+                pos_x = pos[0]
+                pos_y = pos[1]
+                pos_z = pos[2]
 
                 capture_live_print(
                         comand=comand, 
@@ -184,7 +184,7 @@ def execute_toolpath(klipper_ctrl, printer, toolpath, data_folder):
                         file_path=data_folder)
                 
 
-                klipper_ctrl.send_gcode(movePrintHead(pos_x, pos_y, pos_z, printer)[0])
+                #klipper_ctrl.send_gcode(movePrintHead(pos_x, pos_y, pos_z, printer)[0])
 
             elif "PASUE" in comand:
 
