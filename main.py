@@ -2,7 +2,8 @@
 
 from datetime import datetime
 from klipper_controller import KlipperController
-from g_code_comands import *
+from g_code.g_code_comands import *
+from g_code.printibility import *
 from data_collection import DataCollector
 from configs import *
 
@@ -67,10 +68,9 @@ data:
 
 def generate_toolpath(prnt, cap):
     toolpath = []
-
+    
     toolpath.extend(printPrimeLine(xStart=5, yStart=10, len=10, prnt=prnt))
     toolpath.extend(printPrimeLine(xStart=10, yStart=10, len=20, prnt=prnt))
-    toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=40, prnt=prnt))
     toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=40, prnt=prnt))
     toolpath.extend(moveZ(10, prnt))
     # Tool Path Generation
@@ -85,7 +85,7 @@ def generate_toolpath(prnt, cap):
     #toolpath.extend(straight_line(prnt=prnt))
 
 
-    #toolpath.extend(contracting_square_wave(start_x=60, start_y=50, height=30, width=10, iterations=10, shrink_rate=0.85, prnt=prnt))
+    toolpath.extend(contracting_square_wave(start_x=60, start_y=50, height=30, width=10, iterations=12, shrink_rate=0.85, prnt=prnt))
     toolpath.extend(capture_print(camera=1, x=90, y=10, z=60, file_name=f"FFT", time_lapse=False))
     
     return toolpath

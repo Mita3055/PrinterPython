@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 import time
-from g_code_comands import absolute, movePrintHead, moveZ
+from g_code.g_code_comands import absolute, movePrintHead, moveZ
 from klipper_controller import *
 
 
@@ -221,3 +221,7 @@ def execute_toolpath(klipper_ctrl, printer, toolpath, data_folder):
     except (ValueError, IndexError) as e:
         print(f"✗ Print Sequence Failed: {e}")
         return False
+
+def PrimePrinter(prnt, klipper_ctrl):
+    print("") 
+    

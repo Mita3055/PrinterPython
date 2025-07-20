@@ -41,7 +41,10 @@ class Printer:
         self.pressure_passed_extrusion = False
         self.segment_length = 0
         self.target_pressure = 0
-    
+
+        self.preExtrussionE = 0.5
+        self.preExtrussionF = 400
+        
     def constPressure(self, target_pressure):
         """
         Enable pressure-based extrusion control
