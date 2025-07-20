@@ -334,36 +334,36 @@ class KlipperController:
         except Exception:
             return "unknown"
         
-def is_printer_moving(self) -> bool:
-    """Check if printer is actually moving"""
-    try:
-        url = f"{self.base_url}/printer/objects/query?motion_report"
-        response = self.session.get(url, timeout=5)
-        result = response.json().get('result', {}).get('status', {})
-        
-        motion_report = result.get('motion_report', {})
-        live_velocity = motion_report.get('live_velocity', 0)
-        
-        # If velocity > 0.1 mm/s, printer is moving
-        return live_velocity > 0.1
-        
-    except Exception:
-        return False
+    def is_printer_moving(self) -> bool:
+        """Check if printer is actually moving"""
+        try:
+            url = f"{self.base_url}/printer/objects/query?motion_report"
+            response = self.session.get(url, timeout=5)
+            result = response.json().get('result', {}).get('status', {})
+            
+            motion_report = result.get('motion_report', {})
+            live_velocity = motion_report.get('live_velocity', 0)
+            
+            # If velocity > 0.1 mm/s, printer is moving
+            return live_velocity > 0.1
+            
+        except Exception:
+            return False
 
-# Replace your wait_for_idle() method with:
-def wait_for_idle(self, timeout: int = 300) -> bool:
-    """Wait for printer to stop moving"""
-    start_time = time.time()
-    
-    while time.time() - start_time < timeout:
-        if not self.is_printer_moving():
-            # Double-check after brief delay
-            time.sleep(0.2)
+    # Replace your wait_for_idle() method with:
+    def wait_for_idle(self, timeout: int = 300) -> bool:
+        """Wait for printer to stop moving"""
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
             if not self.is_printer_moving():
-                return True
-        time.sleep(0.1)
-    
-    return False
+                # Double-check after brief delay
+                time.sleep(0.2)
+                if not self.is_printer_moving():
+                    return True
+            time.sleep(0.1)
+        
+        return False
     
     def home_axes(self, axes: str = "XYZ") -> bool:
         """
