@@ -123,7 +123,7 @@ def capture_live_print(comand, klipper_ctrl, prnt , file_path):
     klipper_ctrl.get_position()
     print(f"Printer is ready to capture")
 
-    input("Hit Enter When Printer Arrives at capture location:\n")
+   # input("Hit Enter When Printer Arrives at capture location:\n")
 
     if camera == 1:
         camera_id = "video0"
