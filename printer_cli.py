@@ -453,7 +453,7 @@ class PrinterSetupCLI:
         for i, (func_name, func_info) in enumerate(self.available_functions.items(), 1):
             signature = func_info['signature']
             params = [p for p in signature.parameters.keys() if p not in ['prnt', 'cap']]
-            param_str = ", ".join(params[:3])  # Show first 3 parameters
+            param_str = ", ".join(params[])  # Show first 3 parameters
             if len(params) > 3:
                 param_str += "..."
             
@@ -513,8 +513,29 @@ class PrinterSetupCLI:
 def main():
     """Main entry point"""
     try:
+        # Prompt the user for a folder name
+        print("\n📁 Enter a folder name for saving data:")
+        folder_name = input("Folder Name: ").strip()
+
+        # Generate a timestamp
+        timestamp = datetime.now().strftime("%m_%d_%H_%M_%S")
+
+        # Combine folder name with timestamp
+        if folder_name:
+            folder_name = f"{folder_name}_{timestamp}"
+        else:
+            folder_name = f"data_{timestamp}"
+
+        # Ensure the data folder exists
+        data_folder = os.path.join("data", folder_name)
+        os.makedirs(data_folder, exist_ok=True)
+
+        print(f"✅ Data folder created: {data_folder}")
+
+        # Initialize the CLI and pass the data folder if needed
         cli = PrinterSetupCLI()
         cli.run()
+
     except Exception as e:
         print(f"❌ Failed to start CLI: {e}")
         print("Make sure you're running this script from the correct directory")

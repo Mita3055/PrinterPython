@@ -147,6 +147,7 @@ def main():
     input("To Begin Print Sequence Hit Enter:")
     print("Print sequence initiated by user!")
     
+    PrimePrinter(printer, klipper)
     
     data_collector.record_print_data(klipper, None)
     execute_toolpath(klipper_ctrl=klipper, printer=printer, toolpath=toolpath, data_folder=data_folder)

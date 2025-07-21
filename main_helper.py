@@ -2,11 +2,11 @@ import os
 from datetime import datetime
 import time
 from tkinter import N
-from g_code.g_code_comands import absolute, movePrintHead, moveZ, primeRoutine
+from g_code import absolute, movePrintHead, moveZ, primeRoutine
 from hardware.klipper_controller import *
 
 
-from hardwarecamera_integration import (
+from hardware.camera_integration import (
     initialize_cameras, capture_image, capture_all_cameras,
     start_timelapse, stop_timelapse, cleanup_all,
     get_available_cameras, VIDEO_DEVICES
@@ -240,6 +240,7 @@ def PrimePrinter(printer, klipper_ctrl):
             response = input().strip().lower()
             if response == 'y':
                 sucsess = True
+                klipper_ctrl.send_gcode(PrimePrinter(printer, x_start=x_start)[0])
             elif response == 'n':
                 # If not successful, increment x_start and try again
                 x_start += 15
