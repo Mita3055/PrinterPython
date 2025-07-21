@@ -3,10 +3,10 @@ from datetime import datetime
 import time
 from tkinter import N
 from g_code.g_code_comands import absolute, movePrintHead, moveZ, primeRoutine
-from klipper_controller import *
+from hardware.klipper_controller import *
 
 
-from camera_integration import (
+from hardwarecamera_integration import (
     initialize_cameras, capture_image, capture_all_cameras,
     start_timelapse, stop_timelapse, cleanup_all,
     get_available_cameras, VIDEO_DEVICES

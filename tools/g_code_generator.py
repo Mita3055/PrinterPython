@@ -8,26 +8,47 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, scrolledtext
 import json
 import inspect
+import os
+import sys
 from datetime import datetime
 from typing import Dict, List, Any
 
+# Add the parent directory to sys.path to import modules
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
 # Import your existing modules
-import sys
-import os
-import inspect
-
-# If needed, add the parent directory to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from configs import Printer, Capacitor
-
 try:
-    from .g_code.g_code_comands import *
-    from .g_code.patterns import *
-    from .g_code.printibility import *
+    from configs import Printer, Capacitor
+    import configs
+    
+    # Add both parent directory and g_code directory to Python path
+    # This allows the g_code modules to find each other
+    g_code_dir = os.path.join(parent_dir, 'g_code')
+    if g_code_dir not in sys.path:
+        sys.path.insert(0, g_code_dir)
+    
+    # Now import the g_code modules - they should be able to find each other
+    from g_code import g_code_comands
+    from g_code import patterns
+    from g_code import printibility
+    print("✓ All modules imported successfully")
+    
 except ImportError as e:
     print(f"Import error: {e}")
-    print("Make sure all required modules are available")
+    print("Make sure you're running this script from the tools/ directory")
+    print("and that all required modules are available in the parent directory")
+    print(f"Looking for modules in: {parent_dir}")
+    
+    # Debug information
+    if os.path.exists(os.path.join(parent_dir, 'g_code')):
+        gcode_files = os.listdir(os.path.join(parent_dir, 'g_code'))
+        print(f"G-code directory contents: {gcode_files}")
+    
+    # Don't show messagebox in case of import error to avoid GUI issues
+    print("Failed to import required modules. Exiting...")
+    sys.exit(1)
 
 class GCodeGeneratorGUI:
     def __init__(self, root):
@@ -61,28 +82,37 @@ class GCodeGeneratorGUI:
 
     def load_profiles(self):
         """Load all available printer and capacitor profiles"""
-        printer_profiles = []
-        capacitor_profiles = []
+        self.printer_profiles = {}
+        self.capacitor_profiles = {}
 
-        for name, obj in vars(configs).items():
+        # Get all attributes from configs module
+        for name in dir(configs):
+            obj = getattr(configs, name)
             if isinstance(obj, Printer):
-                printer_profiles.append((name, obj))
+                self.printer_profiles[name] = obj
             elif isinstance(obj, Capacitor):
-                capacitor_profiles.append((name, obj))
+                self.capacitor_profiles[name] = obj
         
-        self.printer_profiles = dict(printer_profiles)
-        self.capacitor_profiles = dict(capacitor_profiles)
+        print(f"Loaded {len(self.printer_profiles)} printer profiles")
+        print(f"Loaded {len(self.capacitor_profiles)} capacitor profiles")
 
     def load_functions(self):
         """Load all available functions from patterns and printibility modules"""
         self.available_functions = {}
         
-        # Load from patterns module
-        patterns_module = __import__('g_code.patterns', fromlist=[''])
-        printibility_module = __import__('g_code.printibility', fromlist=[''])
+        # Get functions from g_code_comands module
+        for name, obj in inspect.getmembers(g_code_comands):
+            if inspect.isfunction(obj) and not name.startswith('_'):
+                sig = inspect.signature(obj)
+                self.available_functions[f"commands.{name}"] = {
+                    'function': obj,
+                    'signature': sig,
+                    'module': 'g_code_comands',
+                    'description': obj.__doc__ or f"G-code command: {name}"
+                }
         
-        # Get functions from patterns
-        for name, obj in inspect.getmembers(patterns_module):
+        # Get functions from patterns module
+        for name, obj in inspect.getmembers(patterns):
             if inspect.isfunction(obj) and not name.startswith('_'):
                 sig = inspect.signature(obj)
                 self.available_functions[f"patterns.{name}"] = {
@@ -92,8 +122,8 @@ class GCodeGeneratorGUI:
                     'description': obj.__doc__ or f"Pattern function: {name}"
                 }
         
-        # Get functions from printibility
-        for name, obj in inspect.getmembers(printibility_module):
+        # Get functions from printibility module
+        for name, obj in inspect.getmembers(printibility):
             if inspect.isfunction(obj) and not name.startswith('_'):
                 sig = inspect.signature(obj)
                 self.available_functions[f"printibility.{name}"] = {
@@ -102,6 +132,8 @@ class GCodeGeneratorGUI:
                     'module': 'printibility',
                     'description': obj.__doc__ or f"Printibility function: {name}"
                 }
+        
+        print(f"Loaded {len(self.available_functions)} functions")
 
     def create_widgets(self):
         """Create the main GUI widgets"""
@@ -353,7 +385,8 @@ class GCodeGeneratorGUI:
                     row=row, column=1, sticky='w', pady=2)
             elif isinstance(default_value, (int, float)) or param_name in [
                 'start_x', 'start_y', 'x', 'y', 'z', 'length', 'width', 'height', 
-                'spacing', 'iterations', 'layers', 'feedrate', 'delay'
+                'spacing', 'iterations', 'layers', 'feedrate', 'delay', 'xStart', 'yStart',
+                'len', 'rows', 'cols', 'arm_count', 'gap', 'arm_gap', 'stem_len', 'arm_len'
             ]:
                 # Numeric parameter - spinbox
                 var = tk.DoubleVar(value=float(default_value) if default_value != "" else 0.0)
@@ -414,7 +447,7 @@ class GCodeGeneratorGUI:
         start_sequence = {
             'type': 'gcode_start',
             'display_name': 'G-code Start (Home + Setup)',
-            'commands': home() + absolute()
+            'commands': g_code_comands.home() + g_code_comands.absolute()
         }
         self.toolpath_sequence.insert(0, start_sequence)  # Add at beginning
         self.refresh_toolpath_display()
@@ -510,8 +543,15 @@ class GCodeGeneratorGUI:
                 if item['type'] == 'gcode_start':
                     gcode_lines.extend(item['commands'])
                 elif item['type'] == 'prime_routine':
-                    prime_commands = primeRoutine(item['parameters']['prnt'])
-                    gcode_lines.extend(prime_commands)
+                    # Use primeRoutine from g_code_comands if it exists
+                    if hasattr(g_code_comands, 'primeRoutine'):
+                        prime_commands = g_code_comands.primeRoutine(item['parameters']['prnt'])
+                        gcode_lines.extend(prime_commands)
+                    else:
+                        # Fallback to basic prime lines
+                        prime_commands = g_code_comands.printPrimeLine(xStart=5, yStart=10, len=10, prnt=item['parameters']['prnt'])
+                        prime_commands.extend(g_code_comands.printPrimeLine(xStart=10, yStart=10, len=20, prnt=item['parameters']['prnt']))
+                        gcode_lines.extend(prime_commands)
                 elif item['type'] == 'function':
                     func_info = self.available_functions[item['function_name']]
                     func = func_info['function']

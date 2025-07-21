@@ -7,7 +7,7 @@ Controls the MXene printer via command line with immediate connection and homing
 import sys
 import time
 import argparse
-from klipper_controller import KlipperController
+from hardware.klipper_controller import KlipperController
 from configs import *
 
 

@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 
 from datetime import datetime
+
 from hardware.klipper_controller import KlipperController
-from g_code.g_code_comands import *
+
+from g_code.comands import *
 from g_code.printibility import *
-from data_collection import DataCollector
+from g_code.patterns import *
 from configs import *
 
+from data_collection import DataCollector
 
-from camera_integration import (
+
+from hardware.camera_integration import (
     initialize_cameras, 
     get_available_cameras, 
     VIDEO_DEVICES
@@ -91,7 +95,7 @@ def generate_toolpath(prnt, cap):
     return toolpath
 
 def main():
-
+    
     # Initialize controller (localhost since running on Pi)
     klipper = KlipperController()
     klipper.connect()

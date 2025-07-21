@@ -1,6 +1,6 @@
-from configs import *
-from patterns import *
-from g_code_comands import *
+from ..configs import *
+from .patterns import *
+from .comands import *
 
 def contracting_square_wave(start_x, start_y, height, width, iterations, shrink_rate, prnt):
     output = ["",

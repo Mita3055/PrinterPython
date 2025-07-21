@@ -1,5 +1,5 @@
 from configs import *
-from g_code_comands import *
+from .comands import *
 
 def printCap(cap, prnt, xStart, yStart):
     output = ["",
