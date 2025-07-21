@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from datetime import datetime
-from klipper_controller import KlipperController
+from hardware.klipper_controller import KlipperController
 from g_code.g_code_comands import *
 from g_code.printibility import *
 from data_collection import DataCollector
@@ -68,7 +68,7 @@ data:
 
 def generate_toolpath(prnt, cap):
     toolpath = []
-    
+
     toolpath.extend(printPrimeLine(xStart=5, yStart=10, len=10, prnt=prnt))
     toolpath.extend(printPrimeLine(xStart=10, yStart=10, len=20, prnt=prnt))
     toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=40, prnt=prnt))

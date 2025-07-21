@@ -268,3 +268,44 @@ def massFlowTest(prnt, Feedrates):
         output.extend(waitForInput())
     
     return output
+
+def FCT(start_x, start_y, start_z, len, prnt):
+    output = []
+
+
+    # Set to absolute positioning
+    output.extend(absolute())
+    # Move print head Z to 40
+    output.extend(moveZ(40, prnt))
+    # Move to (5, 10, 40)
+    output.extend(movePrintHead(5, 10, 40, prnt))
+    # Print 3 prime lines
+    output.extend(printPrimeLine(5,10,20,prnt))
+    output.extend(printPrimeLine(10,10,30,prnt))
+    output.extend(printPrimeLine(15,10,40,prnt))
+
+    # Raise Z
+    output.extend(moveZ(45, prnt))
+    # Ask to continue
+    output.extend(send_message("Prime lines complete. Ready to continue?"))
+    output.extend(waitForInput())
+
+    # Set to absolute positioning
+    output.extend(absolute())
+    # Move Z to start_z + 5
+    output.extend(moveZ(start_z + 5, prnt))
+    # Move print head to (start_x, start_y - 5, start_z + 5)
+    output.extend(movePrintHead(start_x, start_y - 5, start_z + 5, prnt))
+    # Set to relative positioning
+    output.extend(relative())
+    # Move print head: 0 in X, 5 in Y, -5 in Z
+    output.extend(movePrintHead(0, 5, -5, prnt))
+    # Print in the Y direction for distance len
+    output.extend(movePrintHead(0, len, 0, prnt))
+    # Move print head: 0 in X, 5 in Y, 5 in Z
+    output.extend(movePrintHead(0, 5, 5, prnt))
+    # Move Z up 55 (relative)
+    output.extend(moveZ(55, prnt))
+
+    return output
+

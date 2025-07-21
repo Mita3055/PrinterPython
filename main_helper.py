@@ -1,7 +1,8 @@
 import os
 from datetime import datetime
 import time
-from g_code.g_code_comands import absolute, movePrintHead, moveZ
+from tkinter import N
+from g_code.g_code_comands import absolute, movePrintHead, moveZ, primeRoutine
 from klipper_controller import *
 
 
@@ -222,6 +223,31 @@ def execute_toolpath(klipper_ctrl, printer, toolpath, data_folder):
         print(f"✗ Print Sequence Failed: {e}")
         return False
 
-def PrimePrinter(prnt, klipper_ctrl):
-    print("") 
-    
+def PrimePrinter(printer, klipper_ctrl):
+    print(" Priming Printer ") 
+
+    sucsess = False
+    x_start = 5
+
+    while not sucsess:
+        # Execute the prime routine at the current x_start position
+        execute_toolpath(primeRoutine(printer, x_start=x_start))        
+        # Prompt the user to confirm if the priming was successful
+
+        print("Was the priming successful? (y/n): ")
+        
+        try:
+            response = input().strip().lower()
+            if response == 'y':
+                sucsess = True
+            elif response == 'n':
+                # If not successful, increment x_start and try again
+                x_start += 15
+            else:
+                print("Please enter 'y' for yes or 'n' for no.")
+        except Exception as e:
+            print(f"Error reading input: {e}")
+            # Optionally, you could continue or break here depending on desired behavior
+            continue
+
+        return sucsess
