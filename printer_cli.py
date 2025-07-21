@@ -1,545 +1,498 @@
 #!/usr/bin/env python3
 """
-Profile CLI - Complete printer setup and toolpath generation interface
-Dynamically loads profiles, connects to printer, and generates toolpaths from g_code/printibility
+Complete Printer Profile & Routine Selector Program
+Integrates all existing components for automated 3D printing routines
 """
 
-import sys
 import os
-import inspect
+import sys
 import time
 from datetime import datetime
-from configs import Printer, Capacitor
-from hardware.klipper_controller import KlipperController
+from typing import Dict, Any, Optional
+
+# Import existing modules
+from klipper_controller import KlipperController
+from data_collection import DataCollector
+from configs import *
+from g_code_comands import *
 from main_helper import data_directory, save_toolpath, execute_toolpath
+from camera_integration import initialize_cameras, get_available_cameras
 
-# Import g_code modules
-try:
-    from g_code import printibility, patterns, comands
-    print("✅ G-code modules loaded successfully")
-except ImportError as e:
-    print(f"❌ Failed to import g_code modules: {e}")
-    sys.exit(1)
-
-class PrinterSetupCLI:
+class PrinterRoutineSelector:
+    """Main program for printer profile selection and routine execution"""
+    
     def __init__(self):
-        self.printer_profiles = {}
-        self.capacitor_profiles = {}
+        self.controller = None
+        self.data_collector = None
         self.selected_printer = None
         self.selected_capacitor = None
-        self.selected_printer_name = ""
-        self.selected_capacitor_name = ""
-        self.klipper = None
-        self.connected = False
-        self.available_functions = {}
+        self.data_folder = None
+        self.cameras_initialized = False
         
-        # Load profiles and functions
-        self.load_profiles()
-        self.load_printibility_functions()
+        # Available profiles (from configs.py)
+        self.printer_profiles = {
+            'pvaPrintProfile': pvaPrintProfile,
+            'MXeneInkPrintProfile': MXeneInkPrintProfile,
+            'MXeneProfile2_20': MXeneProfile2_20,
+            'MXeneProfile2_20_slide': MXeneProfile2_20_slide,
+            'MXeneProfile_pet_25G': MXeneProfile_pet_25G,
+            'MXeneProfile_pet_30G': MXeneProfile_pet_30G,
+            'MXeneProfile_1pNanoParticles_25G': MXeneProfile_1pNanoParticles_25G,
+            'MXeneProfile_2pNanoParticles_25G': MXeneProfile_2pNanoParticles_25G,
+            'MXeneProfile_3pNanoParticles_22G': MXeneProfile_3pNanoParticles_22G,
+            'MXeneProfile_5pNanoParticles_22G': MXeneProfile_5pNanoParticles_22G,
+            'MXeneProfile_10pNanoParticles_22G': MXeneProfile_10pNanoParticles_22G
+        }
+        
+        self.capacitor_profiles = {
+            'LargeCap': LargeCap,
+            'stdCap': stdCap,
+            'electroCellCap': electroCellCap,
+            'smallCap': smallCap
+        }
+        
+        # Available print routines (from g_code_comands.py)
+        self.print_routines = {
+            'lattice': {
+                'name': 'Lattice/Grid Pattern',
+                'function': lattice,
+                'params': ['start_x', 'start_y', 'rows', 'cols', 'spacing'],
+                'defaults': [60, 50, 5, 5, 3],
+                'description': 'Print a lattice/grid pattern'
+            },
+            'square_wave': {
+                'name': 'Square Wave Pattern',
+                'function': square_wave,
+                'params': ['start_x', 'start_y', 'height', 'width', 'iterations'],
+                'defaults': [60, 50, 20, 5, 10],
+                'description': 'Print square wave pattern'
+            },
+            'contracting_square_wave': {
+                'name': 'Contracting Square Wave',
+                'function': contracting_square_wave,
+                'params': ['start_x', 'start_y', 'height', 'width', 'iterations', 'shrink_rate'],
+                'defaults': [60, 50, 20, 5, 8, 0.9],
+                'description': 'Print contracting square wave pattern'
+            },
+            'straight_line': {
+                'name': 'Straight Line Test',
+                'function': straight_line,
+                'params': ['start_x', 'start_y', 'length', 'qty', 'spacing'],
+                'defaults': [60, 50, 40, 5, 5],
+                'description': 'Print straight line test pattern'
+            },
+            'printCap': {
+                'name': 'Print Capacitor',
+                'function': printCap,
+                'params': ['xStart', 'yStart'],
+                'defaults': [60, 50],
+                'description': 'Print capacitor pattern (requires capacitor profile)'
+            },
+            'printCap_contact_patch': {
+                'name': 'Print Capacitor with Contact Patch',
+                'function': printCap_contact_patch,
+                'params': ['xStart', 'yStart'],
+                'defaults': [60, 50],
+                'description': 'Print capacitor with contact patches'
+            },
+            'singleLineCap_left': {
+                'name': 'Single Line Capacitor (Left)',
+                'function': singleLineCap_left,
+                'params': ['xStart', 'yStart', 'layers', 'layer_height', 'delay'],
+                'defaults': [60, 50, 1, 0.2, 30],
+                'description': 'Print single line capacitor - left side only'
+            },
+            'singleLineCap_right': {
+                'name': 'Single Line Capacitor (Right)',
+                'function': singleLineCap_right,
+                'params': ['xStart', 'yStart', 'layers', 'layer_height', 'delay'],
+                'defaults': [60, 50, 1, 0.2, 30],
+                'description': 'Print single line capacitor - right side only'
+            }
+        }
     
-    def load_profiles(self):
-        """Dynamically discover all Printer and Capacitor profiles"""
-        import configs
-        
-        for name in dir(configs):
-            obj = getattr(configs, name)
-            
-            if isinstance(obj, Printer):
-                self.printer_profiles[name] = obj
-            elif isinstance(obj, Capacitor):
-                self.capacitor_profiles[name] = obj
-        
-        print(f"✅ Loaded {len(self.printer_profiles)} printer profiles and {len(self.capacitor_profiles)} capacitor profiles")
+    def print_banner(self):
+        """Print program banner"""
+        print("=" * 80)
+        print("🖨️  AUTOMATED 3D PRINTER ROUTINE SELECTOR")
+        print("=" * 80)
+        print("Complete system for profile selection and routine execution")
+        print()
     
-    def load_printibility_functions(self):
-        """Load available functions from printibility module"""
-        for name, obj in inspect.getmembers(printibility):
-            if inspect.isfunction(obj) and not name.startswith('_'):
-                sig = inspect.signature(obj)
-                self.available_functions[name] = {
-                    'function': obj,
-                    'signature': sig,
-                    'description': obj.__doc__ or f"Printibility function: {name}"
-                }
+    def select_printer_profile(self) -> bool:
+        """Select printer profile from available options"""
+        print("📋 PRINTER PROFILE SELECTION")
+        print("-" * 40)
         
-        print(f"✅ Loaded {len(self.available_functions)} printibility functions")
-    
-    def display_printer_details(self, printer, profile_name):
-        """Display detailed printer information"""
-        print(f"\n{'='*50}")
-        print(f"🖨️  PRINTER PROFILE: {profile_name}")
-        print(f"{'='*50}")
-        print(f"Extrusion Rate:     {printer.extrusion}")
-        print(f"Retraction:         {printer.retraction}")
-        print(f"Feed Rate:          {printer.feed_rate} mm/min")
-        print(f"Movement Speed:     {printer.movement_speed} mm/min")
-        print(f"Print Height:       {printer.print_height} mm")
-        print(f"Bed Height:         {printer.bed_height} mm")
-        print(f"Z Hop:              {printer.z_hop} mm")
-        print(f"Line Gap:           {printer.line_gap} mm")
+        profiles = list(self.printer_profiles.keys())
         
-        if hasattr(printer, 'pressure_passed_extrusion'):
-            print(f"Pressure Control:   {'Enabled' if printer.pressure_passed_extrusion else 'Disabled'}")
-        if hasattr(printer, 'target_pressure') and printer.target_pressure > 0:
-            print(f"Target Pressure:    {printer.target_pressure} N")
-    
-    def display_capacitor_details(self, capacitor, profile_name):
-        """Display detailed capacitor information"""
-        print(f"\n{'='*50}")
-        print(f"🔧 CAPACITOR PROFILE: {profile_name}")
-        print(f"{'='*50}")
-        print(f"Stem Length:        {capacitor.stem_len} mm")
-        print(f"Arm Length:         {capacitor.arm_len} mm")
-        print(f"Arm Count:          {capacitor.arm_count}")
-        print(f"Gap:                {capacitor.gap} mm")
-        print(f"Arm Gap:            {capacitor.arm_gap} mm")
-        print(f"Contact Patch Width: {capacitor.contact_patch_width} mm")
-    
-    def select_printer_profile(self):
-        """Allow user to select a printer profile"""
-        print(f"\n📋 STEP 1: SELECT PRINTER PROFILE")
-        print("-" * 50)
-        
-        profile_list = list(self.printer_profiles.keys())
-        for i, profile_name in enumerate(profile_list, 1):
-            description = ""
-            if "PVA" in profile_name:
-                description = "(PVA Material)"
-            elif "MXene" in profile_name:
-                description = "(MXene Material)"
-            elif "NanoParticles" in profile_name:
-                description = "(With Nanoparticles)"
-            
-            print(f"{i:2d}. {profile_name} {description}")
+        for i, profile_name in enumerate(profiles, 1):
+            profile = self.printer_profiles[profile_name]
+            print(f"{i:2d}. {profile_name}")
+            print(f"     Extrusion: {profile.extrusion}, Feed Rate: {profile.feed_rate}")
+            print(f"     Print Height: {profile.print_height}, Bed Height: {profile.bed_height}")
+            print()
         
         while True:
             try:
-                choice = input(f"\nSelect printer profile (1-{len(profile_list)}) or 'q' to quit: ").strip()
-                
+                choice = input(f"Select printer profile (1-{len(profiles)}): ").strip()
                 if choice.lower() == 'q':
                     return False
                 
-                choice_num = int(choice)
-                if 1 <= choice_num <= len(profile_list):
-                    self.selected_printer_name = profile_list[choice_num - 1]
-                    self.selected_printer = self.printer_profiles[self.selected_printer_name]
-                    
-                    self.display_printer_details(self.selected_printer, self.selected_printer_name)
+                index = int(choice) - 1
+                if 0 <= index < len(profiles):
+                    profile_name = profiles[index]
+                    self.selected_printer = self.printer_profiles[profile_name]
+                    print(f"✓ Selected printer profile: {profile_name}")
                     return True
                 else:
-                    print(f"❌ Please enter a number between 1 and {len(profile_list)}")
-                    
-            except ValueError:
-                print("❌ Please enter a valid number or 'q' to quit")
-    
-    def select_capacitor_profile(self):
-        """Allow user to select a capacitor profile"""
-        print(f"\n📋 STEP 2: SELECT CAPACITOR PROFILE")
-        print("-" * 50)
-        
-        profile_list = list(self.capacitor_profiles.keys())
-        for i, profile_name in enumerate(profile_list, 1):
-            description = ""
-            if "Large" in profile_name:
-                description = "(Large Size)"
-            elif "std" in profile_name:
-                description = "(Standard Size)"
-            elif "small" in profile_name:
-                description = "(Small Size)"
-            elif "electro" in profile_name:
-                description = "(Electrochemical Cell)"
-            
-            print(f"{i:2d}. {profile_name} {description}")
-        
-        while True:
-            try:
-                choice = input(f"\nSelect capacitor profile (1-{len(profile_list)}) or 'q' to quit: ").strip()
-                
-                if choice.lower() == 'q':
-                    return False
-                
-                choice_num = int(choice)
-                if 1 <= choice_num <= len(profile_list):
-                    self.selected_capacitor_name = profile_list[choice_num - 1]
-                    self.selected_capacitor = self.capacitor_profiles[self.selected_capacitor_name]
-                    
-                    self.display_capacitor_details(self.selected_capacitor, self.selected_capacitor_name)
-                    return True
-                else:
-                    print(f"❌ Please enter a number between 1 and {len(profile_list)}")
-                    
-            except ValueError:
-                print("❌ Please enter a valid number or 'q' to quit")
-    
-    def initialize_printer(self):
-        """Initialize Klipper controller and connect to printer"""
-        print(f"\n📋 STEP 3: INITIALIZE PRINTER CONNECTION")
-        print("-" * 50)
-        
-        try:
-            # Initialize controller
-            print("🔌 Initializing Klipper controller...")
-            self.klipper = KlipperController()
-            
-            # Connect to printer
-            print("🔌 Connecting to printer...")
-            if not self.klipper.connect():
-                print("❌ Failed to connect to printer!")
-                print("Please check:")
-                print("  1. Moonraker is running (sudo systemctl status moonraker)")
-                print("  2. Printer is powered on and connected")
-                print("  3. Network connection to printer")
+                    print("❌ Invalid selection. Try again.")
+            except (ValueError, KeyboardInterrupt):
+                print("\n❌ Cancelled by user")
                 return False
-            
-            print("✅ Successfully connected to printer!")
-            
-            # Check homing status
-            homed_axes = self.klipper.get_homed_axes()
-            if not homed_axes or len(homed_axes) < 3:
-                print("🏠 Printer not homed. Homing all axes...")
-                if not self.klipper.home_axes("XYZ"):
-                    print("❌ Homing failed!")
+    
+    def select_capacitor_profile(self) -> bool:
+        """Select capacitor profile from available options"""
+        print("\n📋 CAPACITOR PROFILE SELECTION")
+        print("-" * 40)
+        
+        profiles = list(self.capacitor_profiles.keys())
+        
+        for i, profile_name in enumerate(profiles, 1):
+            cap = self.capacitor_profiles[profile_name]
+            print(f"{i:2d}. {profile_name}")
+            print(f"     Stem: {cap.stem_len}mm, Arms: {cap.arm_len}mm x {cap.arm_count}")
+            print(f"     Gap: {cap.gap}mm, Arm Gap: {cap.arm_gap}mm")
+            print()
+        
+        while True:
+            try:
+                choice = input(f"Select capacitor profile (1-{len(profiles)}): ").strip()
+                if choice.lower() == 'q':
                     return False
-                print("✅ Homing completed successfully!")
-            else:
-                print(f"✅ Printer already homed on axes: {homed_axes.upper()}")
-            
-            # Display current position
-            self.klipper.print_position()
-            self.connected = True
+                
+                index = int(choice) - 1
+                if 0 <= index < len(profiles):
+                    profile_name = profiles[index]
+                    self.selected_capacitor = self.capacitor_profiles[profile_name]
+                    print(f"✓ Selected capacitor profile: {profile_name}")
+                    return True
+                else:
+                    print("❌ Invalid selection. Try again.")
+            except (ValueError, KeyboardInterrupt):
+                print("\n❌ Cancelled by user")
+                return False
+    
+    def connect_printer(self) -> bool:
+        """Connect to the printer"""
+        print("\n🔌 CONNECTING TO PRINTER")
+        print("-" * 40)
+        
+        self.controller = KlipperController()
+        
+        if self.controller.connect():
+            print("✓ Successfully connected to printer")
             return True
-            
-        except Exception as e:
-            print(f"❌ Error initializing printer: {e}")
+        else:
+            print("❌ Failed to connect to printer")
             return False
     
-    def select_printibility_function(self):
-        """Allow user to select a function from printibility module"""
-        print(f"\n📋 STEP 4: SELECT PRINTIBILITY FUNCTION")
-        print("-" * 50)
+    def initialize_systems(self) -> bool:
+        """Initialize camera and data collection systems"""
+        print("\n📷 INITIALIZING SYSTEMS")
+        print("-" * 40)
         
-        func_list = list(self.available_functions.keys())
-        for i, func_name in enumerate(func_list, 1):
-            func_info = self.available_functions[func_name]
-            desc = func_info['description']
-            # Truncate long descriptions
-            if len(desc) > 50:
-                desc = desc[:47] + "..."
-            print(f"{i:2d}. {func_name:<25} - {desc}")
+        # Initialize cameras
+        if initialize_cameras():
+            cameras = get_available_cameras()
+            print(f"✓ Initialized {len(cameras)} cameras")
+            self.cameras_initialized = True
+        else:
+            print("⚠ Camera initialization failed - continuing without cameras")
+            self.cameras_initialized = False
+        
+        # Create data directory
+        self.data_folder = data_directory()
+        print(f"✓ Created data directory: {self.data_folder}")
+        
+        # Initialize data collector
+        self.data_collector = DataCollector(self.data_folder)
+        print("✓ Data collector initialized")
+        
+        return True
+    
+    def home_printer(self) -> bool:
+        """Home the printer"""
+        print("\n🏠 HOMING PRINTER")
+        print("-" * 40)
+        
+        print("Homing all axes...")
+        if self.controller.home_axes("XYZ"):
+            print("✓ Printer homed successfully")
+            self.controller.get_position()
+            return True
+        else:
+            print("❌ Homing failed")
+            return False
+    
+    def prime_printer(self) -> bool:
+        """Prime the printer"""
+        print("\n🔧 PRIMING PRINTER")
+        print("-" * 40)
+        
+        print("Running priming sequence...")
+        
+        # Generate priming toolpath
+        prime_toolpath = []
+        prime_toolpath.extend(absolute())
+        prime_toolpath.extend(printPrimeLine(xStart=5, yStart=10, len=15, prnt=self.selected_printer))
+        prime_toolpath.extend(printPrimeLine(xStart=10, yStart=10, len=15, prnt=self.selected_printer))
+        prime_toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=15, prnt=self.selected_printer))
+        
+        # Execute priming
+        try:
+            for command in prime_toolpath:
+                if command.strip() and not command.strip().startswith(";"):
+                    self.controller.send_gcode(command)
+                    time.sleep(0.01)
+            
+            print("✓ Priming completed successfully")
+            return True
+        except Exception as e:
+            print(f"❌ Priming failed: {e}")
+            return False
+    
+    def select_routine(self) -> Optional[Dict[str, Any]]:
+        """Select print routine from available options"""
+        print("\n📋 PRINT ROUTINE SELECTION")
+        print("-" * 40)
+        
+        routines = list(self.print_routines.keys())
+        
+        for i, routine_name in enumerate(routines, 1):
+            routine = self.print_routines[routine_name]
+            print(f"{i:2d}. {routine['name']}")
+            print(f"     {routine['description']}")
+            print()
         
         while True:
             try:
-                choice = input(f"\nSelect function (1-{len(func_list)}) or 'q' to quit: ").strip()
-                
+                choice = input(f"Select print routine (1-{len(routines)}): ").strip()
                 if choice.lower() == 'q':
                     return None
                 
-                choice_num = int(choice)
-                if 1 <= choice_num <= len(func_list):
-                    func_name = func_list[choice_num - 1]
-                    func_info = self.available_functions[func_name]
-                    
-                    print(f"\n✅ Selected: {func_name}")
-                    print(f"Description: {func_info['description']}")
-                    return func_name, func_info
+                index = int(choice) - 1
+                if 0 <= index < len(routines):
+                    routine_name = routines[index]
+                    return {
+                        'name': routine_name,
+                        **self.print_routines[routine_name]
+                    }
                 else:
-                    print(f"❌ Please enter a number between 1 and {len(func_list)}")
-                    
-            except ValueError:
-                print("❌ Please enter a valid number or 'q' to quit")
+                    print("❌ Invalid selection. Try again.")
+            except (ValueError, KeyboardInterrupt):
+                print("\n❌ Cancelled by user")
+                return None
     
-    def get_function_parameters(self, func_name, func_info):
-        """Get parameters for the selected function"""
-        print(f"\n📋 STEP 5: CONFIGURE FUNCTION PARAMETERS")
-        print("-" * 50)
+    def get_routine_parameters(self, routine: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Get parameters for selected routine"""
+        print(f"\n⚙️ CONFIGURING {routine['name'].upper()}")
+        print("-" * 40)
+        print(f"Description: {routine['description']}")
+        print()
         
-        signature = func_info['signature']
-        parameters = {}
+        params = {}
+        param_names = routine['params']
+        defaults = routine['defaults']
         
-        # Skip 'prnt' and 'cap' parameters as they're provided automatically
-        skip_params = ['prnt', 'cap']
+        # Add required parameters (printer and capacitor)
+        params['prnt'] = self.selected_printer
+        if 'cap' in param_names or any('Cap' in routine['name'] for _ in [routine['name']]):
+            params['cap'] = self.selected_capacitor
         
-        for param_name, param in signature.parameters.items():
-            if param_name in skip_params:
+        # Get user input for other parameters
+        for i, param_name in enumerate(param_names):
+            if param_name in ['prnt', 'cap']:
                 continue
+                
+            default_value = defaults[i] if i < len(defaults) else 0
             
-            # Get default value
-            default_value = param.default if param.default != inspect.Parameter.empty else ""
-            
-            # Get user input
             while True:
                 try:
-                    if isinstance(default_value, bool):
-                        prompt = f"{param_name} (y/n, default={default_value}): "
-                        user_input = input(prompt).strip().lower()
-                        if user_input == '':
-                            parameters[param_name] = default_value
-                        elif user_input in ['y', 'yes', 'true', '1']:
-                            parameters[param_name] = True
-                        elif user_input in ['n', 'no', 'false', '0']:
-                            parameters[param_name] = False
-                        else:
-                            print("❌ Please enter y/n")
-                            continue
+                    user_input = input(f"Enter {param_name} (default: {default_value}): ").strip()
                     
-                    elif isinstance(default_value, (int, float)) or param_name in [
-                        'start_x', 'start_y', 'x', 'y', 'z', 'length', 'width', 'height', 
-                        'spacing', 'iterations', 'layers', 'feedrate', 'delay'
-                    ]:
-                        prompt = f"{param_name} (number, default={default_value}): "
-                        user_input = input(prompt).strip()
-                        if user_input == '':
-                            parameters[param_name] = default_value if default_value != "" else 0
-                        else:
-                            # Try to determine if it should be int or float
-                            if '.' in user_input:
-                                parameters[param_name] = float(user_input)
-                            else:
-                                parameters[param_name] = int(user_input)
-                    
+                    if user_input == "":
+                        params[param_name] = default_value
+                        break
+                    elif user_input.lower() == 'q':
+                        return None
                     else:
-                        prompt = f"{param_name} (text, default='{default_value}'): "
-                        user_input = input(prompt).strip()
-                        if user_input == '':
-                            parameters[param_name] = default_value
+                        # Try to convert to appropriate type
+                        if isinstance(default_value, int):
+                            params[param_name] = int(user_input)
+                        elif isinstance(default_value, float):
+                            params[param_name] = float(user_input)
                         else:
-                            parameters[param_name] = user_input
-                    
-                    break
-                    
+                            params[param_name] = user_input
+                        break
                 except ValueError:
-                    print("❌ Invalid input. Please try again.")
+                    print(f"❌ Invalid input for {param_name}. Try again.")
         
-        # Add required parameters
-        parameters['prnt'] = self.selected_printer
-        if 'cap' in [p.name for p in signature.parameters.values()]:
-            parameters['cap'] = self.selected_capacitor
-        
-        return parameters
+        return params
     
-    def generate_and_execute_toolpath(self, func_name, func_info, parameters):
-        """Generate and execute the toolpath"""
-        print(f"\n📋 STEP 6: GENERATE AND EXECUTE TOOLPATH")
-        print("-" * 50)
+    def execute_routine(self, routine: Dict[str, Any], params: Dict[str, Any]) -> bool:
+        """Execute the selected routine"""
+        print(f"\n🚀 EXECUTING {routine['name'].upper()}")
+        print("-" * 40)
         
         try:
-            # Create data directory
-            folder_name = f"{func_name}_{self.selected_printer_name}_{self.selected_capacitor_name}"
-            data_folder = data_directory(folder_name=folder_name)
-            print(f"📁 Created data folder: {data_folder}")
-            
             # Generate toolpath
-            print("🔧 Generating toolpath...")
-            func = func_info['function']
-            toolpath = func(**parameters)
+            print("Generating toolpath...")
+            routine_function = routine['function']
             
-            if not toolpath:
-                print("❌ Failed to generate toolpath!")
-                return False
+            # Generate G-code commands
+            toolpath = []
+            toolpath.extend(home())
             
-            print(f"✅ Generated toolpath with {len(toolpath)} commands")
+            # Call the routine function with parameters
+            routine_commands = routine_function(**params)
+            toolpath.extend(routine_commands)
+            
+            # Add final commands
+            toolpath.extend(moveZ(10, self.selected_printer))
+            toolpath.extend(motorOff())
             
             # Save toolpath
-            print("💾 Saving toolpath...")
-            save_toolpath(toolpath, data_folder)
+            save_toolpath(toolpath, self.data_folder)
+            print("✓ Toolpath generated and saved")
             
-            # Preview toolpath (first 10 commands)
-            print("\n📋 TOOLPATH PREVIEW (first 10 commands):")
-            print("-" * 50)
-            for i, cmd in enumerate(toolpath[:10]):
-                print(f"{i+1:2d}. {cmd}")
-            if len(toolpath) > 10:
-                print(f"... and {len(toolpath) - 10} more commands")
+            # Start data collection
+            print("Starting data collection...")
+            self.data_collector.record_print_data(self.controller, interval=0.05)
             
-            # Ask user to confirm execution
-            print("-" * 50)
-            confirm = input("\n⚠️  Execute toolpath on printer? (y/N): ").strip().lower()
+            # Execute toolpath
+            print("Executing print routine...")
+            success = execute_toolpath(
+                klipper_ctrl=self.controller,
+                printer=self.selected_printer,
+                toolpath=toolpath,
+                data_folder=self.data_folder
+            )
             
-            if confirm in ['y', 'yes']:
-                print("🚀 Executing toolpath...")
-                success = execute_toolpath(
-                    klipper_ctrl=self.klipper,
-                    printer=self.selected_printer,
-                    toolpath=toolpath,
-                    data_folder=data_folder
-                )
-                
-                if success:
-                    print("✅ Toolpath executed successfully!")
-                else:
-                    print("❌ Toolpath execution failed!")
-                
-                return success
-            else:
-                print("⏭️  Toolpath execution skipped")
+            # Stop data collection
+            self.data_collector.stop_record_data()
+            
+            if success:
+                print("✅ Routine executed successfully!")
                 return True
+            else:
+                print("❌ Routine execution failed")
+                return False
                 
         except Exception as e:
-            print(f"❌ Error generating/executing toolpath: {e}")
+            print(f"❌ Error executing routine: {e}")
+            if self.data_collector:
+                self.data_collector.stop_record_data()
             return False
     
-    def run_complete_workflow(self):
-        """Run the complete workflow: profiles -> connect -> function -> execute"""
-        print("="*60)
-        print("🖨️  COMPLETE PRINTER SETUP & TOOLPATH GENERATION")
-        print("="*60)
-        
-        # Step 1: Select printer profile
-        if not self.select_printer_profile():
-            return False
-        
-        # Step 2: Select capacitor profile
-        if not self.select_capacitor_profile():
-            return False
-        
-        # Show configuration summary
-        print(f"\n💡 CONFIGURATION SUMMARY:")
-        print(f"   Printer:   {self.selected_printer_name}")
-        print(f"   Capacitor: {self.selected_capacitor_name}")
-        
-        # Step 3: Initialize printer
-        if not self.initialize_printer():
-            return False
-        
-        # Step 4: Select function
-        func_result = self.select_printibility_function()
-        if not func_result:
-            return False
-        
-        func_name, func_info = func_result
-        
-        # Step 5: Get parameters
-        parameters = self.get_function_parameters(func_name, func_info)
-        
-        # Step 6: Generate and execute
-        return self.generate_and_execute_toolpath(func_name, func_info, parameters)
-    
-    def main_menu(self):
-        """Display main menu"""
-        print("\n" + "="*60)
-        print("🖨️  PRINTER SETUP CLI")
-        print("="*60)
-        print("1. Complete Workflow (Profiles → Connect → Generate → Execute)")
-        print("2. View Printer Profiles Only")
-        print("3. View Capacitor Profiles Only")
-        print("4. List Available Functions")
-        print("5. Test Printer Connection")
-        print("6. Exit")
-        print("="*60)
+    def run_another_routine(self) -> bool:
+        """Ask if user wants to run another routine"""
+        print("\n🔄 RUN ANOTHER ROUTINE?")
+        print("-" * 40)
         
         while True:
-            choice = input("Select an option (1-6): ").strip()
-            
-            if choice == '1':
-                return 'workflow'
-            elif choice == '2':
-                return 'printer'
-            elif choice == '3':
-                return 'capacitor'
-            elif choice == '4':
-                return 'functions'
-            elif choice == '5':
-                return 'test'
-            elif choice == '6':
-                return 'exit'
+            choice = input("Would you like to run another routine? (y/n): ").strip().lower()
+            if choice in ['y', 'yes']:
+                return True
+            elif choice in ['n', 'no']:
+                return False
             else:
-                print("❌ Please enter a number between 1 and 6")
+                print("Please enter 'y' or 'n'")
     
-    def list_functions(self):
-        """List all available printibility functions"""
-        print(f"\n📋 AVAILABLE PRINTIBILITY FUNCTIONS ({len(self.available_functions)}):")
-        print("-" * 60)
+    def cleanup(self):
+        """Cleanup resources"""
+        print("\n🧹 CLEANING UP")
+        print("-" * 40)
         
-        for i, (func_name, func_info) in enumerate(self.available_functions.items(), 1):
-            signature = func_info['signature']
-            params = [p for p in signature.parameters.keys() if p not in ['prnt', 'cap']]
-            param_str = ", ".join(params[])  # Show first 3 parameters
-            if len(params) > 3:
-                param_str += "..."
-            
-            print(f"{i:2d}. {func_name:<25} ({param_str})")
+        if self.data_collector:
+            self.data_collector.stop_record_data()
         
-        print("-" * 60)
-    
-    def test_connection(self):
-        """Test printer connection without full workflow"""
-        print(f"\n🧪 TESTING PRINTER CONNECTION")
-        print("-" * 50)
+        if self.cameras_initialized:
+            from camera_integration import cleanup_all
+            cleanup_all()
+            print("✓ Camera system cleaned up")
         
-        if self.initialize_printer():
-            print("✅ Connection test successful!")
-            if self.klipper:
-                self.klipper.print_status()
-        else:
-            print("❌ Connection test failed!")
+        print("✓ Cleanup completed")
     
     def run(self):
-        """Main application loop"""
+        """Main program execution"""
         try:
-            while True:
-                choice = self.main_menu()
+            self.print_banner()
+            
+            # Step 1: Select profiles
+            if not self.select_printer_profile():
+                print("❌ Printer profile selection cancelled")
+                return
                 
-                if choice == 'exit':
-                    print("\n👋 Goodbye!")
-                    if self.klipper:
-                        print("🔌 Disconnecting from printer...")
+            if not self.select_capacitor_profile():
+                print("❌ Capacitor profile selection cancelled")
+                return
+            
+            # Step 2: Connect to printer
+            if not self.connect_printer():
+                print("❌ Cannot proceed without printer connection")
+                return
+            
+            # Step 3: Initialize systems
+            if not self.initialize_systems():
+                print("❌ System initialization failed")
+                return
+            
+            # Step 4: Home printer
+            if not self.home_printer():
+                print("❌ Cannot proceed without homing")
+                return
+            
+            # Step 5: Prime printer
+            if not self.prime_printer():
+                print("❌ Priming failed - continuing anyway")
+            
+            # Step 6: Main routine loop
+            while True:
+                # Select routine
+                routine = self.select_routine()
+                if not routine:
+                    print("❌ Routine selection cancelled")
                     break
-                    
-                elif choice == 'workflow':
-                    self.run_complete_workflow()
-                    input("\nPress Enter to continue...")
-                    
-                elif choice == 'printer':
-                    self.select_printer_profile()
-                    input("\nPress Enter to continue...")
-                    
-                elif choice == 'capacitor':
-                    self.select_capacitor_profile()
-                    input("\nPress Enter to continue...")
-                    
-                elif choice == 'functions':
-                    self.list_functions()
-                    input("\nPress Enter to continue...")
-                    
-                elif choice == 'test':
-                    self.test_connection()
-                    input("\nPress Enter to continue...")
-                    
+                
+                # Get parameters
+                params = self.get_routine_parameters(routine)
+                if not params:
+                    print("❌ Parameter configuration cancelled")
+                    continue
+                
+                # Execute routine
+                self.execute_routine(routine, params)
+                
+                # Ask for another routine
+                if not self.run_another_routine():
+                    break
+            
+            print("\n✅ Program completed successfully!")
+            
         except KeyboardInterrupt:
-            print("\n\n👋 Goodbye!")
+            print("\n\n❌ Program interrupted by user")
         except Exception as e:
-            print(f"\n❌ Error: {e}")
+            print(f"\n❌ Unexpected error: {e}")
+        finally:
+            self.cleanup()
+
 
 def main():
     """Main entry point"""
-    try:
-        # Prompt the user for a folder name
-        print("\n📁 Enter a folder name for saving data:")
-        folder_name = input("Folder Name: ").strip()
+    program = PrinterRoutineSelector()
+    program.run()
 
-        # Generate a timestamp
-        timestamp = datetime.now().strftime("%m_%d_%H_%M_%S")
-
-        # Combine folder name with timestamp
-        if folder_name:
-            folder_name = f"{folder_name}_{timestamp}"
-        else:
-            folder_name = f"data_{timestamp}"
-
-        # Ensure the data folder exists
-        data_folder = os.path.join("data", folder_name)
-        os.makedirs(data_folder, exist_ok=True)
-
-        print(f"✅ Data folder created: {data_folder}")
-
-        # Initialize the CLI and pass the data folder if needed
-        cli = PrinterSetupCLI()
-        cli.run()
-
-    except Exception as e:
-        print(f"❌ Failed to start CLI: {e}")
-        print("Make sure you're running this script from the correct directory")
-        print("and that all required modules are available.")
 
 if __name__ == "__main__":
     main()
