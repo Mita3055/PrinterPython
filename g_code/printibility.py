@@ -1,4 +1,4 @@
-from ..configs import *
+from configs import *
 from .patterns import *
 from .comands import *
 

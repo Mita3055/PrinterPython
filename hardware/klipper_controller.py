@@ -285,6 +285,41 @@ class KlipperController:
         
         return None
     
+    def get_live_position(self) -> Optional[Dict[str, float]]:
+        """
+        Get live position from motion_report (real-time during moves)
+        
+        Returns:
+            Dict: {'X': float, 'Y': float, 'Z': float, 'E': float} or None
+        """
+        if not self.connected:
+            return None
+        
+        try:
+            url = f"{self.base_url}/printer/objects/query?motion_report"
+            response = self.session.get(url, timeout=5)
+            response.raise_for_status()
+            
+            result = response.json().get('result', {}).get('status', {})
+            motion_report = result.get('motion_report', {})
+            live_position = motion_report.get('live_position', [])
+            
+            if len(live_position) >= 4:
+                return {
+                    'X': live_position[0],
+                    'Y': live_position[1],
+                    'Z': live_position[2],
+                    'E': live_position[3]
+                }
+            else:
+                # Fallback to regular position if live_position unavailable
+                return self.get_position()
+                
+        except Exception as e:
+            print(f"Error getting live position: {e}")
+            # Fallback to regular position on error
+            return self.get_position()
+        
     def get_homed_axes(self) -> str:
         """
         Get which axes are homed

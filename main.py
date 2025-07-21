@@ -7,9 +7,9 @@ from hardware.klipper_controller import KlipperController
 from g_code.comands import *
 from g_code.printibility import *
 from g_code.patterns import *
-from configs import *
 
 from data_collection import DataCollector
+from configs import *
 
 
 from hardware.camera_integration import (
@@ -148,12 +148,9 @@ def main():
     print("Print sequence initiated by user!")
     
     
-    #data_collector.record_print_data(klipper, None)
-    
-
+    data_collector.record_print_data(klipper, None)
     execute_toolpath(klipper_ctrl=klipper, printer=printer, toolpath=toolpath, data_folder=data_folder)
-
-    #data_collector.stop_record_data()
+    data_collector.stop_record_data()
     
     # Optional: Capture final images from all cameras
 

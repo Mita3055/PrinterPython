@@ -29,14 +29,14 @@ class DataCollector:
                     
             while self._recording:
                 t = time.time() - self._start_time
-                pos = controller.get_position()  # Should return Tuple of (X, Y, Z, E)
+                pos = controller.get_live_position()  # Should return Tuple of (X, Y, Z, E)
                 if getLoad is None:
                     writer.writerow([
                         f"{t:.3f}",
-                        pos[0],
-                        pos[1],
-                        pos[2],
-                        pos[3]
+                        pos.get('X', 0),
+                        pos.get('Y', 0),
+                        pos.get('Z', 0),
+                        pos.get('E', 0),
                     ])
                 else:
                     load = getLoad()
