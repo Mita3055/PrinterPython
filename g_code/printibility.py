@@ -230,22 +230,30 @@ def straight_line(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5):
     return output
     
 
-def straigtLineRoutine(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5, sheerRates=None):
+def straigtLineRoutine(prnt, start_x=60, start_y=50, length=40, qty=5, spacing=5, feedrates=None):
     output = []
     if sheerRates is None:
         sheerRates = [0.1,0.2,0.5,1,2,5,10,20,50,100,200,500]
    
     def calcParamiters(rates):
 
-        return prnt.extrussion,prnt.feed_rate
+        for feed in [100, 150, 250, 250, 300, 350, 400, 500, 600, 700, 800]:
+            if feed >= rates:
+                newe = (feed * 0.059681^2)/2
+                newf = feed
+                break
+
+        return newe,newf
 
     for rate in sheerRates:
         newe, newf = calcParamiters(rate)
         prnt.extrusion = newe
         prnt.feed_rate = newf
-
-        output.extend(straight_line(prnt))
-        output.extend(capture_print(1,start_x, 0, 60, f"staigt_line_rate{rate}"))
+        output.extend(primeRoutine(prnt))
+        prnt.extrusion = newe
+        prnt.feed_rate = newf
+        output.extend(straight_line(prnt, start_x, start_y, length, qty, spacing))
+        output.extend(capture_print(1,90, 0, 60, f"staigt_line_rate{rate}"))
         output.extend(send_message( "Please Clean Print Surface" ))
         output.extend(send_message( "Ready to Continue" ))
         output.extend(waitForInput())

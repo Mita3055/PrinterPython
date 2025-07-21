@@ -11,12 +11,12 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 
 # Import existing modules
-from klipper_controller import KlipperController
+from hardware.klipper_controller import KlipperController
 from data_collection import DataCollector
 from configs import *
-from g_code_comands import *
+from g_code import *
 from main_helper import data_directory, save_toolpath, execute_toolpath
-from camera_integration import initialize_cameras, get_available_cameras
+from hardware.camera_integration import initialize_cameras, get_available_cameras
 
 class PrinterRoutineSelector:
     """Main program for printer profile selection and routine execution"""
@@ -246,8 +246,8 @@ class PrinterRoutineSelector:
         prime_toolpath = []
         prime_toolpath.extend(absolute())
         prime_toolpath.extend(printPrimeLine(xStart=5, yStart=10, len=15, prnt=self.selected_printer))
-        prime_toolpath.extend(printPrimeLine(xStart=10, yStart=10, len=15, prnt=self.selected_printer))
-        prime_toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=15, prnt=self.selected_printer))
+        prime_toolpath.extend(printPrimeLine(xStart=10, yStart=10, len=20, prnt=self.selected_printer))
+        prime_toolpath.extend(printPrimeLine(xStart=15, yStart=10, len=30, prnt=self.selected_printer))
         
         # Execute priming
         try:
@@ -418,7 +418,7 @@ class PrinterRoutineSelector:
             self.data_collector.stop_record_data()
         
         if self.cameras_initialized:
-            from camera_integration import cleanup_all
+            from hardware.camera_integration import cleanup_all
             cleanup_all()
             print("✓ Camera system cleaned up")
         
